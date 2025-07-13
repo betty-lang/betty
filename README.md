@@ -1,4 +1,6 @@
-# Betty
+<img src="logo.svg" alt="logo" width="200">
+
+---
 
 Betty is a dynamic programming language designed for prototyping purposes. It supports various data types, has a standard library, and offers a simple and intuitive syntax. For more information, please refer to the [official Betty documentation](https://betty-lang.github.io/betty-docs/).
 

@@ -1,4 +1,4 @@
-﻿using Betty.Core.AST;
+using Betty.Core.AST;
 
 namespace Betty.Core.Interpreter
 {
@@ -298,6 +298,58 @@ namespace Betty.Core.Interpreter
             }
         }
 
+        private static Value PerformLogicalOperation(Value left, Value right, TokenType op)
+        {
+            if (left.Type != ValueType.Boolean || right.Type != ValueType.Boolean)
+            {
+                throw new InvalidOperationException("Logical operations require both operands to be boolean.");
+            }
+            bool leftBoolean = left.AsBoolean();
+            bool rightBoolean = right.AsBoolean();
+            return Value.FromBoolean(op == TokenType.And ? leftBoolean && rightBoolean : leftBoolean || rightBoolean);
+        }
+
+        private static Value PerformAddition(Value left, Value right)
+        {
+            // If either operand is a string, concatenate as strings
+            if (left.Type == ValueType.String || right.Type == ValueType.String)
+            {
+                return Value.FromString(left.ToString() + right.ToString());
+            }
+            // If the left operand is a list, add the right operand to the list
+            if (left.Type == ValueType.List)
+            {
+                var list = left.AsList();
+                // If right is also a list, extend with its items
+                if (right.Type == ValueType.List)
+                {
+                    list.AddRange(right.AsList());
+                }
+                else
+                {
+                    list.Add(right);
+                }
+                return left;
+            }
+            // If the right operand is a list, add the left operand to the list
+            if (right.Type == ValueType.List)
+            {
+                var list = right.AsList();
+                // If left is also a list, prepend its items
+                if (left.Type == ValueType.List)
+                {
+                    list.InsertRange(0, left.AsList());
+                }
+                else
+                {
+                    list.Insert(0, left);
+                }
+                return right;
+            }
+            // If none are strings or lists, perform numerical addition
+            return Value.FromNumber(left.AsNumber() + right.AsNumber());
+        }
+
         public Value Visit(BinaryOperatorExpression node)
         {
             var leftResult = node.Left.Accept(this);
@@ -307,53 +359,10 @@ namespace Betty.Core.Interpreter
             {
                 case TokenType.And:
                 case TokenType.Or:
-                    if (leftResult.Type != ValueType.Boolean || rightResult.Type != ValueType.Boolean)
-                    {
-                        throw new InvalidOperationException("Logical operations require both operands to be boolean.");
-                    }
-                    bool leftBoolean = leftResult.AsBoolean();
-                    bool rightBoolean = rightResult.AsBoolean();
-                    return Value.FromBoolean(
-                        node.Operator == TokenType.And ? leftBoolean && rightBoolean : leftBoolean || rightBoolean);
+                    return PerformLogicalOperation(leftResult, rightResult, node.Operator);
 
                 case TokenType.Plus:
-                    // If either operand is a string, concatenate as strings
-                    if (leftResult.Type == ValueType.String || rightResult.Type == ValueType.String)
-                    {
-                        return Value.FromString(leftResult.ToString() + rightResult.ToString());
-                    }
-                    // If the left operand is a list, add the right operand to the list
-                    if (leftResult.Type == ValueType.List)
-                    {
-                        var list = leftResult.AsList();
-                        // If right is also a list, extend with its items
-                        if (rightResult.Type == ValueType.List)
-                        {
-                            list.AddRange(rightResult.AsList());
-                        }
-                        else
-                        {
-                            list.Add(rightResult);
-                        }
-                        return leftResult;
-                    }
-                    // If the right operand is a list, add the left operand to the list
-                    if (rightResult.Type == ValueType.List)
-                    {
-                        var list = rightResult.AsList();
-                        // If left is also a list, prepend its items
-                        if (leftResult.Type == ValueType.List)
-                        {
-                            list.InsertRange(0, leftResult.AsList());
-                        }
-                        else
-                        {
-                            list.Insert(0, leftResult);
-                        }
-                        return rightResult;
-                    }
-                    // If none are strings or lists, perform numerical addition
-                    return Value.FromNumber(leftResult.AsNumber() + rightResult.AsNumber());
+                    return PerformAddition(leftResult, rightResult);
                 case TokenType.Minus:
                 case TokenType.Mul:
                 case TokenType.Div:
@@ -672,6 +681,70 @@ namespace Betty.Core.Interpreter
             _functions[node.FunctionName!] = node;
         }
 
+        private Value HandleIncrementDecrement(UnaryOperatorExpression node, Value operandResult)
+        {
+            var op = node.Operator;
+            var fixity = node.Fixity;
+
+            if (node.Operand is Variable variableNode)
+            {
+                if (operandResult.Type != ValueType.Number && operandResult.Type != ValueType.Char)
+                    throw new InvalidOperationException(
+                        $"{fixity} {op} operators can only be applied to numbers or characters.");
+
+                var variableName = variableNode.Name;
+                var currentValue = operandResult.AsNumber();
+                var newValue = op switch
+                {
+                    TokenType.Increment => currentValue + 1,
+                    TokenType.Decrement => currentValue - 1,
+                    _ => throw new InvalidOperationException($"Unsupported {fixity} assignment operator {op}")
+                };
+                _scopeManager.SetVariable(variableName, Value.FromNumber(newValue));
+
+                return node.Fixity == OperatorFixity.Prefix ?
+                    Value.FromNumber(newValue) : Value.FromNumber(currentValue);
+            }
+
+            // Check if the operand is an element access in a list
+            if (node.Operand is IndexerExpression indexer)
+            {
+                // Ensure the list and index are valid
+                var listResult = indexer.Collection.Accept(this);
+                var indexResult = indexer.Index.Accept(this);
+                if (listResult.Type != ValueType.List || indexResult.Type != ValueType.Number)
+                    throw new InvalidOperationException("Invalid element access in list.");
+
+                var list = listResult.AsList();
+                var index = (int)indexResult.AsNumber();
+                if (index < 0 || index >= list.Count)
+                    throw new IndexOutOfRangeException("List index out of range.");
+
+                // Ensure the target element is a number or a character
+                if (list[index].Type != ValueType.Number
+                    && list[index].Type != ValueType.Char)
+                    throw new InvalidOperationException(
+                        $"{fixity} {op} operators can only be applied to numbers or characters.");
+
+                var currentValue = list[index].AsNumber();
+                var newValue = op switch
+                {
+                    TokenType.Increment => currentValue + 1,
+                    TokenType.Decrement => currentValue - 1,
+                    _ => throw new InvalidOperationException($"Unsupported {fixity} assignment operator {op}")
+                };
+
+                // Update the list element
+                list[index] = Value.FromNumber(newValue);
+
+                // Depending on whether it's prefix or postfix, return the new or old value
+                return node.Fixity == OperatorFixity.Prefix ?
+                    Value.FromNumber(newValue) : Value.FromNumber(currentValue);
+            }
+
+            throw new Exception($"The operand of a {fixity} {op} operator must be a variable or a list element.");
+        }
+
         public Value Visit(UnaryOperatorExpression node)
         {
             var operandResult = node.Operand.Accept(this);
@@ -688,63 +761,7 @@ namespace Betty.Core.Interpreter
                     return Value.FromBoolean(!operandResult.AsBoolean());
 
                 case (TokenType.Increment or TokenType.Decrement, _):
-                    if (node.Operand is Variable variableNode)
-                    {
-                        if (operandResult.Type != ValueType.Number && operandResult.Type != ValueType.Char)
-                            throw new InvalidOperationException(
-                                $"{fixity} {op} operators can only be applied to numbers or characters.");
-
-                        var variableName = variableNode.Name;
-                        var currentValue = operandResult.AsNumber();
-                        var newValue = op switch
-                        {
-                            TokenType.Increment => currentValue + 1,
-                            TokenType.Decrement => currentValue - 1,
-                            _ => throw new InvalidOperationException($"Unsupported {fixity} assignment operator {op}")
-                        };
-                        _scopeManager.SetVariable(variableName, Value.FromNumber(newValue));
-
-                        return node.Fixity == OperatorFixity.Prefix ?
-                            Value.FromNumber(newValue) : Value.FromNumber(currentValue);
-                    }
-
-                    // Check if the operand is an element access in a list
-                    if (node.Operand is IndexerExpression indexer)
-                    {
-                        // Ensure the list and index are valid
-                        var listResult = indexer.Collection.Accept(this);
-                        var indexResult = indexer.Index.Accept(this);
-                        if (listResult.Type != ValueType.List || indexResult.Type != ValueType.Number)
-                            throw new InvalidOperationException("Invalid element access in list.");
-
-                        var list = listResult.AsList();
-                        var index = (int)indexResult.AsNumber();
-                        if (index < 0 || index >= list.Count)
-                            throw new IndexOutOfRangeException("List index out of range.");
-
-                        // Ensure the target element is a number or a character
-                        if (list[index].Type != ValueType.Number 
-                            && list[index].Type != ValueType.Char)
-                            throw new InvalidOperationException(
-                                $"{fixity} {op} operators can only be applied to numbers or characters.");
-
-                        var currentValue = list[index].AsNumber();
-                        var newValue = op switch
-                        {
-                            TokenType.Increment => currentValue + 1,
-                            TokenType.Decrement => currentValue - 1,
-                            _ => throw new InvalidOperationException($"Unsupported {fixity} assignment operator {op}")
-                        };
-
-                        // Update the list element
-                        list[index] = Value.FromNumber(newValue);
-
-                        // Depending on whether it's prefix or postfix, return the new or old value
-                        return node.Fixity == OperatorFixity.Prefix ? 
-                            Value.FromNumber(newValue) : Value.FromNumber(currentValue);
-                    }
-
-                    throw new Exception($"The operand of a {fixity} {op} operator must be a variable or a list element.");
+                    return HandleIncrementDecrement(node, operandResult);
 
 
                 default:

@@ -1,20 +1,15 @@
 ﻿namespace Betty.Core.AST
 {
-    public class ForStatement : Statement
+    public class ForStatement(
+        Expression? initializer, 
+        Expression? condition,
+        Expression? increment, 
+        Statement body) : Statement
     {
-        public Expression? Initializer { get; }
-        public Expression? Condition { get; }
-        public Expression? Increment { get; }
-        public Statement Body { get; }
-
-        public ForStatement(Expression? initializer, Expression? condition, 
-            Expression? increment, Statement body)
-        {
-            Initializer = initializer;
-            Condition = condition;
-            Increment = increment;
-            Body = body;
-        }
+        public Expression? Initializer { get; } = initializer;
+        public Expression? Condition { get; } = condition;
+        public Expression? Increment { get; } = increment;
+        public Statement Body { get; } = body;
 
         public override void Accept(IStatementVisitor visitor) => visitor.Visit(this);
     }

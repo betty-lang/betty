@@ -16,7 +16,7 @@
         Semicolon, Comma, QuestionMark, Colon, DotDot,
 
         // Keywords/identifiers
-        Func, Global, TrueKeyword, FalseKeyword, Identifier,
+        Func, Global, True, False, Identifier,
         If, Then, Elif, Else, For, ForEach, In, While, Do, Break, Continue, Return,
 
         // Assignment operators

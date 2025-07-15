@@ -2,18 +2,11 @@
 
 namespace Betty.Core.AST
 {
-    public class TernaryOperatorExpression : Expression
+    public class TernaryOperatorExpression(Expression condition, Expression trueExpression, Expression falseExpression) : Expression
     {
-        public Expression Condition { get; }
-        public Expression TrueExpression { get; }
-        public Expression FalseExpression { get; }
-
-        public TernaryOperatorExpression(Expression condition, Expression trueExpression, Expression falseExpression) 
-        {
-            Condition = condition;
-            TrueExpression = trueExpression;
-            FalseExpression = falseExpression;
-        }
+        public Expression Condition { get; } = condition;
+        public Expression TrueExpression { get; } = trueExpression;
+        public Expression FalseExpression { get; } = falseExpression;
 
         public override Value Accept(IExpressionVisitor visitor) => visitor.Visit(this);
     }

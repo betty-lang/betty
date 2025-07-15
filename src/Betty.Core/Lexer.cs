@@ -13,8 +13,8 @@
         {
             ["func"] = TokenType.Func,
             ["global"] = TokenType.Global,
-            ["true"] = TokenType.TrueKeyword,
-            ["false"] = TokenType.FalseKeyword,
+            ["true"] = TokenType.True,
+            ["false"] = TokenType.False,
             ["if"] = TokenType.If,
             ["then"] = TokenType.Then,
             ["elif"] = TokenType.Elif,

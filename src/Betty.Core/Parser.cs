@@ -229,11 +229,13 @@ namespace Betty.Core
                     break;
 
                 // Boolean keywords
-                case TokenType.TrueKeyword:
-                case TokenType.FalseKeyword:
-                    Consume(token.Type);
-                    expr = new BooleanExpression(token.Type == TokenType.TrueKeyword);
-                    break;
+                case TokenType.True:
+                case TokenType.False:
+                    {
+                        expr = new BooleanExpression(token.Type == TokenType.True);
+                        Consume(token.Type);
+                        break;
+                    }
 
                 // Lists or list ranges
                 case TokenType.LBracket:

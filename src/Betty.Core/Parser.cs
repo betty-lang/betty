@@ -132,6 +132,25 @@ namespace Betty.Core
             return left;
         }
 
+        private List<T> ParseSeparatedList<T>(TokenType separator, TokenType endToken, Func<T> parseElement)
+        {
+            var elements = new List<T>();
+
+            if (_currentToken.Type != endToken)
+            {
+                do
+                {
+                    if (_currentToken.Type == separator)
+                        Consume(separator);
+
+                    elements.Add(parseElement());
+                }
+                while (_currentToken.Type == separator);
+            }
+
+            return elements;
+        }
+
         private FunctionCall ParseRange()
         {
             var start = ParseExpression(); // Parse the start of the range
@@ -151,20 +170,7 @@ namespace Betty.Core
             if (_lexer.PeekNextToken().Type == TokenType.DotDot)
                 return ParseRange();
 
-            var elements = new List<Expression>(); // Create a list to store the elements
-
-            // Check if the list is not empty
-            if (_currentToken.Type != TokenType.RBracket)
-            {
-                do
-                {
-                    if (_currentToken.Type == TokenType.Comma)
-                        Consume(TokenType.Comma);
-
-                    elements.Add(ParseExpression());
-                }
-                while (_currentToken.Type == TokenType.Comma);
-            }
+            var elements = ParseSeparatedList<Expression>(TokenType.Comma, TokenType.RBracket, () => ParseExpression());
 
             Consume(TokenType.RBracket); // Consume the closing bracket
             return new ListLiteral(elements);
@@ -361,8 +367,7 @@ namespace Betty.Core
             var condition = ParseExpression();
             Consume(TokenType.RParen);
 
-            // Parse thenStatement as either a compound statement or a single statement
-            var thenStatement = (_currentToken.Type == TokenType.LBrace) ? ParseCompoundStatement() : ParseStatement();
+            var thenStatement = ParseStatement();
 
             var elseIfStatements = new List<(Expression Condition, Statement Statement)>();
             Statement? elseStatement = null;
@@ -373,16 +378,14 @@ namespace Betty.Core
                 Consume(TokenType.LParen);
                 var elseIfCondition = ParseExpression();
                 Consume(TokenType.RParen);
-                // Parse elseIfStatement similarly
-                var elseIfStatement = (_currentToken.Type == TokenType.LBrace) ? ParseCompoundStatement() : ParseStatement();
+                var elseIfStatement = ParseStatement();
                 elseIfStatements.Add((elseIfCondition, elseIfStatement));
             }
 
             if (_currentToken.Type == TokenType.Else)
             {
                 Consume(TokenType.Else);
-                // Parse elseStatement similarly
-                elseStatement = (_currentToken.Type == TokenType.LBrace) ? ParseCompoundStatement() : ParseStatement();
+                elseStatement = ParseStatement();
             }
 
             return new IfStatement(condition, thenStatement, elseIfStatements, elseStatement);
@@ -414,7 +417,7 @@ namespace Betty.Core
             }
             Consume(TokenType.RParen);
 
-            var body = (_currentToken.Type == TokenType.LBrace) ? ParseCompoundStatement() : ParseStatement();
+            var body = ParseStatement();
 
             return new ForStatement(initializer, condition, increment, body);
         }
@@ -425,14 +428,14 @@ namespace Betty.Core
             Consume(TokenType.LParen);
             var condition = ParseExpression();
             Consume(TokenType.RParen);
-            var body = (_currentToken.Type == TokenType.LBrace) ? ParseCompoundStatement() : ParseStatement();
+            var body = ParseStatement();
             return new WhileStatement(condition, body);
         }
 
         private DoWhileStatement ParseDoWhileStatement()
         {             
             Consume(TokenType.Do);
-            var body = (_currentToken.Type == TokenType.LBrace) ? ParseCompoundStatement() : ParseStatement();
+            var body = ParseStatement();
             Consume(TokenType.While);
             Consume(TokenType.LParen);
             var condition = ParseExpression();
@@ -476,7 +479,7 @@ namespace Betty.Core
             Consume(TokenType.In);
             var listExpression = ParseExpression();
             Consume(TokenType.RParen);
-            var body = (_currentToken.Type == TokenType.LBrace) ? ParseCompoundStatement() : ParseStatement();
+            var body = ParseStatement();
             return new ForEachStatement(variableName, listExpression, body);
         }
 
@@ -518,18 +521,7 @@ namespace Betty.Core
             Consume(TokenType.LParen);
 
             // Parse the arguments
-            var arguments = new List<Expression>();
-            if (_currentToken.Type != TokenType.RParen) // Check if the next token is not a right parenthesis
-            {
-                do
-                {
-                    if (_currentToken.Type == TokenType.Comma)
-                        Consume(TokenType.Comma); // Consume the comma before parsing the next argument
-
-                    arguments.Add(ParseExpression());
-                }
-                while (_currentToken.Type == TokenType.Comma); // Continue if there's a comma (more arguments)
-            }
+            var arguments = ParseSeparatedList<Expression>(TokenType.Comma, TokenType.RParen, () => ParseExpression());
 
             // Consume the closing parenthesis
             Consume(TokenType.RParen);
@@ -564,32 +556,19 @@ namespace Betty.Core
 
         private List<string> ParseParameters()
         {
-            var parameters = new List<string>();
-
-            if (_currentToken.Type != TokenType.RParen) // Check if parameter list is empty
+            return ParseSeparatedList<string>(TokenType.Comma, TokenType.RParen, () =>
             {
-                do
+                if (_currentToken.Type == TokenType.Identifier)
                 {
-                    if (_currentToken.Type == TokenType.Identifier)
-                    {
-                        string paramName = (string)_currentToken.Value!;
-                        parameters.Add(paramName);
-                        Consume(TokenType.Identifier);
-                    }
-                    else
-                    {
-                        throw new Exception($"Expected an identifier, found {_currentToken.Type}.");
-                    }
-
-                    if (_currentToken.Type == TokenType.Comma)
-                    {
-                        Consume(TokenType.Comma); // Eat comma and expect another parameter
-                    }
+                    string paramName = (string)_currentToken.Value!;
+                    Consume(TokenType.Identifier);
+                    return paramName;
                 }
-                while (_currentToken.Type != TokenType.RParen);
-            }
-
-            return parameters;
+                else
+                {
+                    throw new Exception($"Expected an identifier, found {_currentToken.Type}.");
+                }
+            });
         }
 
         private List<string> ParseGlobalVariableDeclarations()

@@ -1,4 +1,4 @@
-<img src="logo.svg" alt="logo" width="200">
+<a href="https://betty-lang.org"><img src="logo.svg" alt="logo" width="200"></a>
 
 ---
 

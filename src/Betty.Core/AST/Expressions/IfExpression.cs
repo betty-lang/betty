@@ -13,6 +13,6 @@ namespace Betty.Core.AST
         public List<(Expression Condition, Expression Expression)> ElseIfExpressions { get; } = elseIfExpressions;
         public Expression ElseExpression { get; } = elseExpression;
 
-        public override Value Accept(IExpressionVisitor visitor) => visitor.Visit(this);
+        public override T Accept<T>(IExpressionVisitor<T> visitor) => visitor.Visit(this);
     }
 }

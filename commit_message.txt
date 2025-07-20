@@ -1,0 +1,21 @@
+feat: Improve parser error reporting and decouple AST
+
+This commit introduces two major improvements: a more robust error reporting system for the compiler and a significant architectural refactoring to improve separation of concerns.
+
+### Error Reporting Improvements
+
+The Lexer and Parser no longer throw an exception on the first error encountered. Instead, they now collect a list of all errors, allowing the CLI to present a comprehensive report to the user at once.
+
+- The Lexer now generates `Error` tokens for invalid syntax (e.g., unterminated strings, unrecognized characters) instead of throwing.
+- The Parser is now able to handle `Error` tokens and uses a synchronization strategy to recover from syntax errors and continue parsing. This allows it to detect multiple errors in a single pass.
+- The main program in `Betty.CLI` was updated to check for and display all collected errors from both the lexer and parser before attempting to interpret the code.
+- Tests were updated to assert that specific errors are collected, rather than asserting that an exception is thrown. A new test was added to verify that multiple, distinct errors are caught in a single run.
+
+### Architectural Refactoring (AST Decoupling)
+
+To improve separation of concerns and prepare for future compiler features (e.g., a bytecode compiler), the AST has been decoupled from the Interpreter.
+
+- The `IExpressionVisitor` and `IStatementVisitor` interfaces are now generic (`IExpressionVisitor<T>` and `IStatementVisitor<T>`).
+- This removes the direct dependency from the AST layer to the Interpreter's `Value` type. The AST is now a pure, reusable representation of the code's structure.
+- The Interpreter now implements the generic visitors (`IExpressionVisitor<Value>`, `IStatementVisitor<Value>`) and accepts a fully parsed `Program` node in its constructor, removing its responsibility for parsing logic.
+- All AST nodes and relevant tests have been updated to support the new generic visitor pattern.

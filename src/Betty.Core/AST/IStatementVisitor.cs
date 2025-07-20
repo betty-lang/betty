@@ -1,18 +1,18 @@
 ﻿namespace Betty.Core.AST
 {
-    public interface IStatementVisitor
+    public interface IStatementVisitor<T>
     {
-        void Visit(IfStatement node);
-        void Visit(ForStatement node);
-        void Visit(ForEachStatement node);
-        void Visit(WhileStatement node);
-        void Visit(DoWhileStatement node);
-        void Visit(BreakStatement node);
-        void Visit(ContinueStatement node);
-        void Visit(ReturnStatement node);
-        void Visit(EmptyStatement node);
-        void Visit(FunctionDefinition node);
-        void Visit(CompoundStatement node);
-        void Visit(ExpressionStatement node);
+        T Visit(IfStatement node);
+        T Visit(ForStatement node);
+        T Visit(ForEachStatement node);
+        T Visit(WhileStatement node);
+        T Visit(DoWhileStatement node);
+        T Visit(BreakStatement node);
+        T Visit(ContinueStatement node);
+        T Visit(ReturnStatement node);
+        T Visit(EmptyStatement node);
+        T Visit(FunctionDefinition node);
+        T Visit(CompoundStatement node);
+        T Visit(ExpressionStatement node);
     }
 }

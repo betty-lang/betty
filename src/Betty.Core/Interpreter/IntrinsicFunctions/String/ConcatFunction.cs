@@ -7,7 +7,7 @@ namespace Betty.Core.Interpreter.IntrinsicFunctions
     {
         public ConcatFunction() : base("concat") { }
 
-        public override Value Execute(IExpressionVisitor visitor, FunctionCall call)
+        public override Value Execute(IExpressionVisitor<Value> visitor, FunctionCall call)
         {
             var stringBuilder = new StringBuilder();
 

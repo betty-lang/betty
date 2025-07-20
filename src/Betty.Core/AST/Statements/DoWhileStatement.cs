@@ -5,6 +5,6 @@
         public Expression Condition { get; } = condition;
         public Statement Body { get; } = body;
 
-        public override void Accept(IStatementVisitor visitor) => visitor.Visit(this);
+        public override T Accept<T>(IStatementVisitor<T> visitor) => visitor.Visit(this);
     }
 }

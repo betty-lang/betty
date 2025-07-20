@@ -5,12 +5,13 @@ namespace Betty.Core.Interpreter
 {
     public partial class Interpreter
     {
-        public void Visit(FunctionDefinition node)
+        public Value Visit(FunctionDefinition node)
         {
             if (_intrinsicFunctions.ContainsKey(node.FunctionName!))
                 throw new Exception($"Function name '{node.FunctionName}' is reserved for built-in functions.");
 
             _functions[node.FunctionName!] = node;
+            return Value.None();
         }
 
         public Value Visit(FunctionCall node)

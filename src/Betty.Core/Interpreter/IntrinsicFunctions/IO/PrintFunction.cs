@@ -7,7 +7,7 @@ namespace Betty.Core.Interpreter.IntrinsicFunctions
     {
         public PrintFunction() : base("print") { }
 
-        public override Value Execute(IExpressionVisitor visitor, FunctionCall call)
+        public override Value Execute(IExpressionVisitor<Value> visitor, FunctionCall call)
         {
             var stringBuilder = new StringBuilder();
 

@@ -6,10 +6,11 @@ namespace Betty.Tests.TestUtilities
     {
         protected static Interpreter SetupInterpreter(string code, bool customSetup = false)
         {
-            return new Interpreter(
-                new Parser(
-                    new Lexer(
-                        customSetup ? code : $"func main() {{ {code} }}")));
+            var lexer = new Lexer(customSetup ? code : $"func main() {{ {code} }}");
+            var tokens = lexer.GetTokens();
+            var parser = new Parser(tokens);
+            var program = (Program)parser.Parse();
+            return new Interpreter(program);
         }
     }
 }

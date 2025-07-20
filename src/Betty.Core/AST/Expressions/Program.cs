@@ -7,6 +7,6 @@ namespace Betty.Core.AST
         public List<string> Globals { get; } = globals;
         public List<FunctionDefinition> Functions { get; } = functions;
 
-        public override Value Accept(IExpressionVisitor visitor) => visitor.Visit(this);
+        public override T Accept<T>(IExpressionVisitor<T> visitor) => visitor.Visit(this);
     }
 }

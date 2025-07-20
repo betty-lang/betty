@@ -7,6 +7,6 @@ namespace Betty.Core.AST
         public Expression Collection { get; } = collection;
         public Expression Index { get; } = index;
 
-        public override Value Accept(IExpressionVisitor visitor) => visitor.Visit(this);
+        public override T Accept<T>(IExpressionVisitor<T> visitor) => visitor.Visit(this);
     }
 }

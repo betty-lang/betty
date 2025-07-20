@@ -59,10 +59,9 @@
         {
             var code = "func emptyFunc()";
             var parser = SetupParser(code);
-            var exception = Record.Exception(() => parser.Parse());
+            parser.Parse();
 
-            Assert.NotNull(exception);
-            Assert.IsType<Exception>(exception);
+            Assert.NotEmpty(parser.Errors);
         }
 
         [Fact]

@@ -11,6 +11,6 @@
         public List<(Expression Condition, Statement Statement)> ElseIfStatements { get; } = elseIfStatements;
         public Statement? ElseStatement { get; } = elseStatement;
 
-        public override void Accept(IStatementVisitor visitor) => visitor.Visit(this);
+        public override T Accept<T>(IStatementVisitor<T> visitor) => visitor.Visit(this);
     }
 }

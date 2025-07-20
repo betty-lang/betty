@@ -5,7 +5,8 @@
         protected static Parser SetupParser(string code)
         {
             var lexer = new Lexer(code);
-            return new Parser(lexer);
+            var tokens = lexer.GetTokens();
+            return new Parser(tokens);
         }
     }
 }

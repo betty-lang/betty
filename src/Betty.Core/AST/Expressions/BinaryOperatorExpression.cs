@@ -8,6 +8,6 @@ namespace Betty.Core.AST
         public TokenType Operator { get; } = op;
         public Expression Right { get; } = right;
 
-        public override Value Accept(IExpressionVisitor visitor) => visitor.Visit(this);
+        public override T Accept<T>(IExpressionVisitor<T> visitor) => visitor.Visit(this);
     }
 }

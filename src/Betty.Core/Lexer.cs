@@ -1,16 +1,18 @@
-﻿using System.Globalization;
+﻿using Betty.Core.Errors;
+using System.Globalization;
 using System.Text;
 
 namespace Betty.Core;
 
-public class Lexer
+public class Lexer(string input)
 {
-    private readonly string _input;
+    private readonly string _input = input;
     private int _position;
     private int _currentLine = 1;
     private int _currentColumn = 1;
-    private char _currentChar;
+    private char _currentChar = input.Length > 0 ? input[0] : '\0';
     private readonly StringBuilder _stringBuilder = new();
+    public List<Error> Errors { get; } = [];
 
     private static readonly Dictionary<string, TokenType> ReservedKeywords = new()
     {
@@ -77,13 +79,6 @@ public class Lexer
         ["//=" ] = TokenType.IntDivEqual
     };
 
-    public Lexer(string input)
-    {
-        _input = input;
-        _position = 0;
-        _currentChar = _input.Length > 0 ? _input[0] : '\0';
-    }
-
     private void Advance(int offset = 1)
     {
         for (var i = 0; i < offset; i++)
@@ -148,23 +143,35 @@ public class Lexer
 
             if (char.IsDigit(_currentChar))
             {
-                return new Token(TokenType.NumberLiteral, ScanNumberLiteral(false), _currentLine, _currentColumn);
+                return ScanNumberLiteral(false);
             }
 
             if (_currentChar == '.' && char.IsDigit(Peek()))
             {
-                return new Token(TokenType.NumberLiteral, ScanNumberLiteral(true), _currentLine, _currentColumn);
+                return ScanNumberLiteral(true);
             }
 
             return _currentChar switch
             {
-                '\'' => new Token(TokenType.CharLiteral, ScanCharLiteral(), _currentLine, _currentColumn),
-                '"' => new Token(TokenType.StringLiteral, ScanStringLiteral(), _currentLine, _currentColumn),
+                '\'' => ScanCharLiteral(),
+                '"' => ScanStringLiteral(),
                 _ => ScanOperator()
             };
         }
 
         return new Token(TokenType.EOF);
+    }
+
+    public List<Token> GetTokens()
+    {
+        var tokens = new List<Token>();
+        Token token;
+        do
+        {
+            token = GetNextToken();
+            tokens.Add(token);
+        } while (token.Type != TokenType.EOF);
+        return tokens;
     }
 
     public Token PeekNextToken()
@@ -174,6 +181,7 @@ public class Lexer
         var savedChar = _currentChar;
         var savedLine = _currentLine;
         var savedColumn = _currentColumn;
+        var savedErrors = new List<Error>(Errors);
 
         var nextToken = GetNextToken();
 
@@ -182,6 +190,8 @@ public class Lexer
         _currentChar = savedChar;
         _currentLine = savedLine;
         _currentColumn = savedColumn;
+        Errors.Clear();
+        Errors.AddRange(savedErrors);
 
         return nextToken;
     }
@@ -205,8 +215,9 @@ public class Lexer
         return new Token(TokenType.Identifier, identifier, _currentLine, _currentColumn);
     }
 
-    private double ScanNumberLiteral(bool hasLeadingDot)
+    private Token ScanNumberLiteral(bool hasLeadingDot)
     {
+        var startColumn = _currentColumn;
         _stringBuilder.Clear();
         var dotEncountered = hasLeadingDot;
 
@@ -227,7 +238,9 @@ public class Lexer
             {
                 if (dotEncountered)
                 {
-                    throw new FormatException("Invalid numeric format with multiple dots.");
+                    var err = new Error("Invalid numeric format with multiple dots.", _currentLine, _currentColumn);
+                    Errors.Add(err);
+                    return new Token(TokenType.Error, err.Message, _currentLine, startColumn);
                 }
                 dotEncountered = true;
             }
@@ -236,11 +249,13 @@ public class Lexer
             Advance();
         }
 
-        return double.Parse(_stringBuilder.ToString(), CultureInfo.InvariantCulture);
+        var value = double.Parse(_stringBuilder.ToString(), CultureInfo.InvariantCulture);
+        return new Token(TokenType.NumberLiteral, value, _currentLine, startColumn);
     }
 
-    private string ScanStringLiteral()
+    private Token ScanStringLiteral()
     {
+        var startColumn = _currentColumn;
         _stringBuilder.Clear();
         Advance(); // Skip opening quote
 
@@ -248,13 +263,21 @@ public class Lexer
         {
             if (_currentChar == '\0')
             {
-                throw new Exception("Unterminated string literal.");
+                var err = new Error("Unterminated string literal.", _currentLine, _currentColumn);
+                Errors.Add(err);
+                return new Token(TokenType.Error, err.Message, _currentLine, startColumn);
             }
 
             if (_currentChar == '\\')
             {
                 Advance(); // Skip escape char
-                _stringBuilder.Append(ScanEscapeSequence());
+                var (esc, error) = ScanEscapeSequence();
+                if (error != null)
+                {
+                    Errors.Add(error);
+                    return new Token(TokenType.Error, error.Message, _currentLine, startColumn);
+                }
+                _stringBuilder.Append(esc);
             }
             else
             {
@@ -264,74 +287,89 @@ public class Lexer
         }
 
         Advance(); // Skip closing quote
-        return _stringBuilder.ToString();
+        return new Token(TokenType.StringLiteral, _stringBuilder.ToString(), _currentLine, startColumn);
     }
 
-private char ScanCharLiteral()
-{
-    Advance(); // Skip opening quote
+    private Token ScanCharLiteral()
+    {
+        var startColumn = _currentColumn;
+        Advance(); // Skip opening quote
 
-    if (_currentChar == '\'')
-    {
-        throw new Exception("Empty character literal.");
-    }
+        if (_currentChar == '\'')
+        {
+            var err = new Error("Empty character literal.", _currentLine, _currentColumn);
+            Errors.Add(err);
+            return new Token(TokenType.Error, err.Message, _currentLine, startColumn);
+        }
 
-    char value;
-    if (_currentChar == '\\')
-    {
-        Advance(); // Skip escape char
-        value = ScanEscapeSequence();
-    }
-    else
-    {
-        value = _currentChar;
-    }
+        char value;
+        if (_currentChar == '\\')
+        {
+            Advance(); // Skip escape char
+            var (esc, error) = ScanEscapeSequence();
+            if (error != null)
+            {
+                Errors.Add(error);
+                return new Token(TokenType.Error, error.Message, _currentLine, startColumn);
+            }
+            value = esc;
+        }
+        else
+        {
+            value = _currentChar;
+        }
 
     Advance();
 
-    if (_currentChar != '\'')
-    {
-        throw new Exception("Unterminated character literal.");
+        if (_currentChar != '\'')
+        {
+            var err = new Error("Unterminated character literal.", _currentLine, _currentColumn);
+            Errors.Add(err);
+            return new Token(TokenType.Error, err.Message, _currentLine, startColumn);
+        }
+
+        Advance(); // Skip closing quote
+        return new Token(TokenType.CharLiteral, value, _currentLine, startColumn);
     }
 
-    Advance(); // Skip closing quote
-    return value;
-}
-
-    private char ScanEscapeSequence() => _currentChar switch
+    private (char, Error?) ScanEscapeSequence() => _currentChar switch
     {
-        'n' => '\n',
-        't' => '\t',
-        '"' => '"',
-        '\'' => '\'',
-        '\\' => '\\',
-        '0' => '\0',
-        _ => throw new Exception($"Unrecognized escape sequence: \\{_currentChar}")
+        'n' => ('\n', null),
+        't' => ('\t', null),
+        '"' => ('"', null),
+        '\'' => ('\'', null),
+        '\\' => ('\\', null),
+        '0' => ('\0', null),
+        _ => ('\0', new Error($"Unrecognized escape sequence: \\{_currentChar}", _currentLine, _currentColumn))
     };
 
     private Token ScanOperator()
     {
+        var startColumn = _currentColumn;
         // Greedily check for the longest possible operator
         var op3 = _stringBuilder.Clear().Append(_currentChar).Append(Peek()).Append(Peek(2)).ToString();
         if (MultiCharOperators.TryGetValue(op3, out var tokenType))
         {
             Advance(3);
-            return new Token(tokenType, null, _currentLine, _currentColumn);
+            return new Token(tokenType, null, _currentLine, startColumn);
         }
 
         var op2 = op3.Substring(0, 2);
         if (MultiCharOperators.TryGetValue(op2, out tokenType))
         {
             Advance(2);
-            return new Token(tokenType, null, _currentLine, _currentColumn);
+            return new Token(tokenType, null, _currentLine, startColumn);
         }
 
         if (SingleCharOperators.TryGetValue(_currentChar, out tokenType))
         {
             Advance();
-            return new Token(tokenType, null, _currentLine, _currentColumn);
+            return new Token(tokenType, null, _currentLine, startColumn);
         }
 
-        throw new Exception($"Unrecognized character: {_currentChar} at line {_currentLine}, column {_currentColumn}");
+        var err = new Error($"Unrecognized character: {_currentChar}", _currentLine, _currentColumn);
+        Errors.Add(err);
+        Advance();
+        return new Token(TokenType.Error, err.Message, _currentLine, startColumn);
     }
 }

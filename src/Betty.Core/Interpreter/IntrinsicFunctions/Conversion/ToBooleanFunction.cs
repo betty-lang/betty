@@ -1,15 +1,14 @@
-﻿using Betty.Core.AST;
+using Betty.Core.AST;
 
-namespace Betty.Core.Interpreter
+namespace Betty.Core.Interpreter.IntrinsicFunctions
 {
-    public static partial class IntrinsicFunctions
+    public class ToBooleanFunction : IntrinsicFunction
     {
-        public static Value ToBooleanFunction(FunctionCall call, IExpressionVisitor visitor)
+        public ToBooleanFunction() : base("tobool") { }
+
+        public override Value Execute(IExpressionVisitor visitor, FunctionCall call)
         {
-            if (call.Arguments.Count != 1)
-            {
-                throw new ArgumentException($"{call.FunctionName} function requires exactly one argument.");
-            }
+            ValidateArgumentCount(call, 1);
 
             var argResult = call.Arguments[0].Accept(visitor);
 
@@ -17,32 +16,26 @@ namespace Betty.Core.Interpreter
             switch (argResult.Type)
             {
                 case ValueType.Number:
-                    // Any number other than 0 is true, 0 is false
                     booleanValue = argResult.AsNumber() != 0;
                     break;
 
                 case ValueType.Char:
-                    // Any character is true
                     booleanValue = true;
                     break;
 
                 case ValueType.String:
-                    // Consider non-empty strings as true, and optionally parse "true" and "false"
                     var str = argResult.AsString();
                     if (bool.TryParse(str, out bool parsedValue))
                     {
-                        // Successfully parsed "true" or "false"
                         booleanValue = parsedValue;
                     }
                     else
                     {
-                        // Any non-empty string is considered true, empty string false
                         booleanValue = !string.IsNullOrEmpty(str);
                     }
                     break;
 
                 case ValueType.Boolean:
-                    // Return the boolean value directly
                     return argResult;
 
                 default:

@@ -1,15 +1,14 @@
-﻿using Betty.Core.AST;
+using Betty.Core.AST;
 
-namespace Betty.Core.Interpreter
-{ 
-    public static partial class IntrinsicFunctions
+namespace Betty.Core.Interpreter.IntrinsicFunctions
+{
+    public class AppendFunction : IntrinsicFunction
     {
-        public static Value AppendFunction(FunctionCall call, IExpressionVisitor visitor)
+        public AppendFunction() : base("append") { }
+
+        public override Value Execute(IExpressionVisitor visitor, FunctionCall call)
         {
-            if (call.Arguments.Count != 2)
-            {
-                throw new ArgumentException("append function requires exactly two arguments: a list and an element to append.");
-            }
+            ValidateArgumentCount(call, 2);
 
             var listResult = call.Arguments[0].Accept(visitor);
             if (listResult.Type != ValueType.List)
@@ -21,7 +20,6 @@ namespace Betty.Core.Interpreter
             var list = listResult.AsList();
             list.Add(element);
 
-            // Return the modified list as a new InterpreterResult.
             return Value.FromList(new List<Value>(list));
         }
     }

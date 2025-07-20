@@ -1,26 +1,24 @@
-﻿using Betty.Core.AST;
+using Betty.Core.AST;
 
-namespace Betty.Core.Interpreter
+namespace Betty.Core.Interpreter.IntrinsicFunctions
 {
-    public static partial class IntrinsicFunctions
+    public class IsSpaceFunction : IntrinsicFunction
     {
-        public static Value IsSpaceFunction(FunctionCall call, IExpressionVisitor visitor)
-        {
-            // Ensure that only one argument is provided
-            if (call.Arguments.Count != 1)
-                throw new Exception($"{call.FunctionName} function requires exactly one argument.");
+        public IsSpaceFunction() : base("isspace") { }
 
-            // Use the visitor to evaluate the argument
+        public override Value Execute(IExpressionVisitor visitor, FunctionCall call)
+        {
+            ValidateArgumentCount(call, 1);
+
             var argResult = call.Arguments[0].Accept(visitor);
 
             if (argResult.Type == ValueType.Char)
             {
-                // Return whether the character is a space
                 var isSpace = char.IsWhiteSpace(argResult.AsChar());
                 return Value.FromBoolean(isSpace);
             }
 
-            throw new Exception($"{call.FunctionName} function is not defined for the given argument type.");
+            throw new Exception($"{Name} function is not defined for the given argument type.");
         }
     }
 }

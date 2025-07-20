@@ -1,15 +1,14 @@
-﻿using Betty.Core.AST;
+using Betty.Core.AST;
 
-namespace Betty.Core.Interpreter
+namespace Betty.Core.Interpreter.IntrinsicFunctions
 {
-    public static partial class IntrinsicFunctions
+    public class ToNumberFunction : IntrinsicFunction
     {
-        public static Value ToNumberFunction(FunctionCall call, IExpressionVisitor visitor)
+        public ToNumberFunction() : base("tonum") { }
+
+        public override Value Execute(IExpressionVisitor visitor, FunctionCall call)
         {
-            if (call.Arguments.Count != 1)
-            {
-                throw new ArgumentException($"{call.FunctionName} function requires exactly one argument.");
-            }
+            ValidateArgumentCount(call, 1);
 
             var argResult = call.Arguments[0].Accept(visitor);
 
@@ -20,7 +19,7 @@ namespace Betty.Core.Interpreter
                     return argResult;
 
                 case ValueType.Char:
-                    numberValue = argResult.AsNumber(); // Get the numeric value of the character.
+                    numberValue = argResult.AsNumber();
                     break;
 
                 case ValueType.Boolean:

@@ -1,4 +1,5 @@
 using Betty.Core.AST;
+using Betty.Core.Interpreter.IntrinsicFunctions;
 
 namespace Betty.Core.Interpreter
 {
@@ -31,9 +32,9 @@ namespace Betty.Core.Interpreter
                     throw new Exception("main() function cannot have parameters.");
 
                 // Execute the main function
-                return Visit(new FunctionCall([], functionName : "main"));
+                return Visit(new FunctionCall([], functionName: "main"));
             }
-            
+
             throw new Exception("No main function found.");
         }
 
@@ -54,7 +55,7 @@ namespace Betty.Core.Interpreter
                         return Expression.Accept(this);
                     }
                 }
-                
+
                 return node.ElseExpression.Accept(this);
             }
         }
@@ -133,31 +134,35 @@ namespace Betty.Core.Interpreter
             _context.FlowState = ControlFlowState.Continue;
         }
 
+        private bool HandleLoopControlFlow()
+        {
+            if (_context.FlowState == ControlFlowState.Continue)
+            {
+                _context.FlowState = ControlFlowState.Normal;
+                return false; // Continue to next iteration
+            }
+
+            if (_context.FlowState == ControlFlowState.Break)
+            {
+                _context.FlowState = ControlFlowState.Normal;
+                return true; // Break out of loop
+            }
+            return false;
+        }
+
+
         public void Visit(DoWhileStatement node)
         {
             _context.EnterLoop();
-
             _scopeManager.EnterScope();
 
-            node.Body.Accept(this);
-
-            while (node.Condition.Accept(this).AsBoolean())
+            do
             {
                 node.Body.Accept(this);
-
-                if (_context.FlowState == ControlFlowState.Continue)
-                {
-                    _context.FlowState = ControlFlowState.Normal;
-                }
-                else if (_context.FlowState == ControlFlowState.Break)
-                {
-                    _context.FlowState = ControlFlowState.Normal;
-                    break;
-                }
-            }
+                if (HandleLoopControlFlow()) break;
+            } while (node.Condition.Accept(this).AsBoolean());
 
             _scopeManager.ExitScope();
-
             _context.ExitLoop();
         }
 
@@ -165,7 +170,7 @@ namespace Betty.Core.Interpreter
         {
             var iterableValue = node.Iterable.Accept(this); // Evaluate the iterable expression
 
-            if (iterableValue.Type != ValueType.List 
+            if (iterableValue.Type != ValueType.List
                 && iterableValue.Type != ValueType.String)
             {
                 throw new InvalidOperationException("The iterable in a foreach statement must be a list or a string.");
@@ -174,93 +179,49 @@ namespace Betty.Core.Interpreter
             var list = iterableValue.AsList();
 
             _context.EnterLoop(); // Enter a new loop context
-
             _scopeManager.EnterScope();
 
             foreach (var element in list)
             {
-                // Set the loop variable to the current element
                 _scopeManager.SetVariable(node.VariableName, element);
-
                 node.Body.Accept(this); // Execute the body of the loop
-
-                if (_context.FlowState == ControlFlowState.Continue)
-                {
-                    _context.FlowState = ControlFlowState.Normal;
-                }
-                else if (_context.FlowState == ControlFlowState.Break)
-                {
-                    _context.FlowState = ControlFlowState.Normal;
-                    break;
-                }
+                if (HandleLoopControlFlow()) break;
             }
 
             _scopeManager.ExitScope();
-
             _context.ExitLoop(); // Exit the loop context
         }
 
         public void Visit(ForStatement node)
         {
-            // Execute the initializer once before the loop starts.
             node.Initializer?.Accept(this);
 
-            _context.EnterLoop(); // Enter a new loop context.
-
+            _context.EnterLoop();
             _scopeManager.EnterScope();
 
             while (node.Condition == null || node.Condition.Accept(this).AsBoolean())
             {
-                // Execute the body of the loop.
                 node.Body.Accept(this);
-
-                // If a continue statement was encountered, reset the flow state and skip directly to the increment.
-                if (_context.FlowState == ControlFlowState.Continue)
-                {
-                    _context.FlowState = ControlFlowState.Normal; // Reset the flow state.
-                }
-                else if (_context.FlowState == ControlFlowState.Break)
-                {
-                    // If a break statement was encountered, exit the loop.
-                    _context.FlowState = ControlFlowState.Normal; // Reset the flow state.
-                    break;
-                }
-
-                // Execute the increment expression.
+                if (HandleLoopControlFlow()) break;
                 node.Increment?.Accept(this);
             }
 
             _scopeManager.ExitScope();
-
-            _context.ExitLoop(); // Exit the loop context.
+            _context.ExitLoop();
         }
 
         public void Visit(WhileStatement node)
         {
             _context.EnterLoop();
-
             _scopeManager.EnterScope();
 
             while (node.Condition.Accept(this).AsBoolean())
             {
-                // Execute the body of the loop.
                 node.Body.Accept(this);
-
-                // Handle continue
-                if (_context.FlowState == ControlFlowState.Continue)
-                {
-                    _context.FlowState = ControlFlowState.Normal; // Reset the flow state.
-                }
-                else if (_context.FlowState == ControlFlowState.Break)
-                {
-                    // If a break statement was encountered, exit the loop.
-                    _context.FlowState = ControlFlowState.Normal; // Reset the flow state.
-                    break;
-                }
+                if (HandleLoopControlFlow()) break;
             }
 
             _scopeManager.ExitScope();
-
             _context.ExitLoop();
         }
 
@@ -285,7 +246,7 @@ namespace Betty.Core.Interpreter
                         Statement.Accept(this);
                         _scopeManager.ExitScope();
                         elseifExecuted = true;
-                        break; // Exit after the first true elseif to prevent executing multiple blocks
+                        break;
                     }
                 }
 
@@ -298,185 +259,7 @@ namespace Betty.Core.Interpreter
             }
         }
 
-        private static Value PerformLogicalOperation(Value left, Value right, TokenType op)
-        {
-            if (left.Type != ValueType.Boolean || right.Type != ValueType.Boolean)
-            {
-                throw new InvalidOperationException("Logical operations require both operands to be boolean.");
-            }
-            bool leftBoolean = left.AsBoolean();
-            bool rightBoolean = right.AsBoolean();
-            return Value.FromBoolean(op == TokenType.And ? leftBoolean && rightBoolean : leftBoolean || rightBoolean);
-        }
-
-        private static Value PerformAddition(Value left, Value right)
-        {
-            // If either operand is a string, concatenate as strings
-            if (left.Type == ValueType.String || right.Type == ValueType.String)
-            {
-                return Value.FromString(left.ToString() + right.ToString());
-            }
-            // If the left operand is a list, add the right operand to the list
-            if (left.Type == ValueType.List)
-            {
-                var list = left.AsList();
-                // If right is also a list, extend with its items
-                if (right.Type == ValueType.List)
-                {
-                    list.AddRange(right.AsList());
-                }
-                else
-                {
-                    list.Add(right);
-                }
-                return left;
-            }
-            // If the right operand is a list, add the left operand to the list
-            if (right.Type == ValueType.List)
-            {
-                var list = right.AsList();
-                // If left is also a list, prepend its items
-                if (left.Type == ValueType.List)
-                {
-                    list.InsertRange(0, left.AsList());
-                }
-                else
-                {
-                    list.Insert(0, left);
-                }
-                return right;
-            }
-            // If none are strings or lists, perform numerical addition
-            return Value.FromNumber(left.AsNumber() + right.AsNumber());
-        }
-
-        public Value Visit(BinaryOperatorExpression node)
-        {
-            var leftResult = node.Left.Accept(this);
-            var rightResult = node.Right.Accept(this);
-
-            switch (node.Operator)
-            {
-                case TokenType.And:
-                case TokenType.Or:
-                    return PerformLogicalOperation(leftResult, rightResult, node.Operator);
-
-                case TokenType.Plus:
-                    return PerformAddition(leftResult, rightResult);
-                case TokenType.Minus:
-                case TokenType.Mul:
-                case TokenType.Div:
-                case TokenType.IntDiv:
-                case TokenType.Caret:
-                case TokenType.Mod:
-                    return (leftResult.Type, rightResult.Type) switch 
-                    {
-                        (ValueType.Number or ValueType.Char, ValueType.Number or ValueType.Char) =>
-                            PerformArithmeticOperation(leftResult, rightResult, node.Operator),
-                        _ => throw new InvalidOperationException("Arithmetic operations require both operands to be numbers.")
-                    };
-
-                case TokenType.EqualEqual:
-                case TokenType.NotEqual:
-                case TokenType.LessThan:
-                case TokenType.LessThanOrEqual:
-                case TokenType.GreaterThan:
-                case TokenType.GreaterThanOrEqual:
-                    return PerformComparison(leftResult, rightResult, node.Operator);
-
-                default:
-                    throw new Exception($"Unsupported binary operator: {node.Operator} for operand types {leftResult.Type} and {rightResult.Type}");
-            }
-        }
-
-        private static Value PerformArithmeticOperation(Value leftResult, Value rightResult, TokenType operatorType)
-        {
-            double leftNumber = leftResult.AsNumber();
-            double rightNumber = rightResult.AsNumber();
-
-            return operatorType switch
-            {
-                TokenType.Plus => Value.FromNumber(leftNumber + rightNumber),
-                TokenType.Minus => Value.FromNumber(leftNumber - rightNumber),
-                TokenType.Mul => Value.FromNumber(leftNumber * rightNumber),
-                TokenType.Div => Value.FromNumber(leftNumber / rightNumber),
-                TokenType.IntDiv => Value.FromNumber(Math.Floor(leftNumber / rightNumber)),
-                TokenType.Caret => Value.FromNumber(Math.Pow(leftNumber, rightNumber)),
-                TokenType.Mod => Value.FromNumber(leftNumber % rightNumber),
-                _ => throw new Exception($"Unsupported arithmetic operator: {operatorType}")
-            };
-        }
-
-        private static Value PerformComparison(Value leftResult, Value rightResult, TokenType operatorType)
-        {
-            switch (leftResult.Type, rightResult.Type)
-            {
-                case (ValueType.Number or ValueType.Char, ValueType.Number or ValueType.Char):
-                    double leftNumber = leftResult.AsNumber();
-                    double rightNumber = rightResult.AsNumber();
-                    return Value.FromBoolean(operatorType switch
-                    {
-                        TokenType.EqualEqual => leftNumber == rightNumber,
-                        TokenType.NotEqual => leftNumber != rightNumber,
-                        TokenType.LessThan => leftNumber < rightNumber,
-                        TokenType.LessThanOrEqual => leftNumber <= rightNumber,
-                        TokenType.GreaterThan => leftNumber > rightNumber,
-                        TokenType.GreaterThanOrEqual => leftNumber >= rightNumber,
-                        _ => throw new Exception($"Unsupported operator for number comparison: {operatorType}")
-                    });
-
-                case (ValueType.String, ValueType.String):
-                    return Value.FromBoolean(operatorType switch
-                    {
-                        TokenType.EqualEqual => leftResult == rightResult,
-                        TokenType.NotEqual => leftResult != rightResult,
-                        TokenType.LessThan => leftResult.AsString().CompareTo(rightResult.AsString()) < 0,
-                        TokenType.LessThanOrEqual => leftResult.AsString().CompareTo(rightResult.AsString()) <= 0,
-                        TokenType.GreaterThan => leftResult.AsString().CompareTo(rightResult.AsString()) > 0,
-                        TokenType.GreaterThanOrEqual => leftResult.AsString().CompareTo(rightResult.AsString()) >= 0,
-                        _ => throw new Exception($"Unsupported operator for string comparison: {operatorType}")
-                    });
-
-                case (ValueType.Boolean, ValueType.Boolean):
-                    return Value.FromBoolean(operatorType switch
-                    {
-                        TokenType.EqualEqual => leftResult == rightResult,
-                        TokenType.NotEqual => leftResult != rightResult,
-                        _ => throw new Exception($"Unsupported operator for boolean comparison: {operatorType}")
-                    });
-
-                case (ValueType.List, ValueType.List) when operatorType == TokenType.EqualEqual || operatorType == TokenType.NotEqual:
-                    var leftList = leftResult.AsList();
-                    var rightList = rightResult.AsList();
-
-                    // Short-circuit evaluation for lists of different lengths
-                    if (leftList.Count != rightList.Count)
-                        return Value.FromBoolean(operatorType == TokenType.NotEqual);
-
-                    // Perform element-wise comparison
-                    for (int i = 0; i < leftList.Count; i++)
-                    {
-                        // Use the equality operator for element comparison
-                        var elementComparisonResult = PerformComparison(leftList[i], rightList[i], TokenType.EqualEqual);
-                        if (!elementComparisonResult.AsBoolean())
-                        {
-                            // If any element comparison returns false for equality, the lists are not equal
-                            return Value.FromBoolean(operatorType == TokenType.NotEqual);
-                        }
-                    }
-
-                    // If we reach here, all elements are equal
-                    return Value.FromBoolean(operatorType == TokenType.EqualEqual);
-
-                case (ValueType.Function, ValueType.Function) when operatorType == TokenType.EqualEqual || operatorType == TokenType.NotEqual:
-                    var leftFunction = leftResult.AsFunction();
-                    var rightFunction = rightResult.AsFunction();
-                    return Value.FromBoolean(leftFunction == rightFunction);
-
-                default:
-                    throw new Exception("Type mismatch or unsupported types for comparison.");
-            }
-        }
+        public Value Visit(BinaryOperatorExpression node) => HandleBinaryExpression(node);
 
         public Value Visit(BooleanExpression node) => Value.FromBoolean(node.Value);
         public Value Visit(NumberLiteral node) => Value.FromNumber(node.Value);
@@ -492,10 +275,9 @@ namespace Betty.Core.Interpreter
             {
                 statement.Accept(this);
 
-                // Handle control flow changes
                 if (_context.FlowState != ControlFlowState.Normal)
                 {
-                    break; // Exit the compound statement early
+                    break;
                 }
             }
 
@@ -518,7 +300,7 @@ namespace Betty.Core.Interpreter
                         TokenType.ModEqual => TokenType.Mod,
                         _ => throw new InvalidOperationException("Unsupported compound assignment operator.")
                     };
-                    return PerformArithmeticOperation(left, right, operatorType);
+                    return HandleArithmetic(left, right, operatorType);
 
                 case (ValueType.String, _):
                     if (operatorType != TokenType.PlusEqual)
@@ -529,21 +311,16 @@ namespace Betty.Core.Interpreter
                     if (operatorType != TokenType.PlusEqual)
                         throw new InvalidOperationException("Compound assignment for lists only supports the += operator.");
 
-                    // Mutate the original list in-place
                     var list = left.AsList();
 
-                    // If the right value is a list, extend the list
                     if (right.Type == ValueType.List)
                     {
                         list.AddRange(right.AsList());
                     }
-                    // Otherwise, add the single item
                     else
                     {
                         list.Add(right);
                     }
-
-                    // Return the same Value, which now contains the mutated list
                     return left;
 
                 default:
@@ -553,26 +330,21 @@ namespace Betty.Core.Interpreter
 
         public Value Visit(AssignmentExpression node)
         {
-            // Evaluate RHS
             Value rhsValue = node.Right.Accept(this);
 
-            // Simple variable assignment
             if (node.Left is Variable variableNode)
             {
                 string variableName = variableNode.Name;
 
-                // If compound assignment, get current value
                 if (node.OperatorType != TokenType.Equal)
                 {
                     var lhsValue = _scopeManager.LookupVariable(variableName);
                     rhsValue = ApplyCompoundOperation(lhsValue, rhsValue, node.OperatorType);
                 }
 
-                // Perform the assignment
                 _scopeManager.SetVariable(variableName, rhsValue);
                 return rhsValue;
             }
-            // Assignment to a list element
             else if (node.Left is IndexerExpression indexer)
             {
                 Value listValue = indexer.Collection.Accept(this);
@@ -584,17 +356,14 @@ namespace Betty.Core.Interpreter
                 List<Value> list = listValue.AsList();
                 int index = Convert.ToInt32(indexValue.AsNumber());
 
-                // Ensure index is within bounds
                 if (index < 0 || index >= list.Count)
                     throw new IndexOutOfRangeException("Index out of range for list assignment.");
 
-                // If compound assignment, apply the operator to the current element
                 if (node.OperatorType != TokenType.Equal)
                 {
                     rhsValue = ApplyCompoundOperation(list[index], rhsValue, node.OperatorType);
                 }
 
-                // Update the list element
                 list[index] = rhsValue;
                 return rhsValue;
             }
@@ -607,80 +376,7 @@ namespace Betty.Core.Interpreter
         public Value Visit(Variable node) => _scopeManager.LookupVariable(node.Name);
 
         public void Visit(EmptyStatement node) { }
-        public Value Visit(FunctionCall node)
-        {
-            FunctionDefinition? function = null;
-
-            // Resolve function reference
-            if (node.FunctionName is not null)
-            {
-                if (_intrinsicFunctions.TryGetValue(node.FunctionName, out var intrinsicFunction))
-                    return intrinsicFunction.Invoke(node, this);
-
-                if (_functions.TryGetValue(node.FunctionName, out var globalFunction))
-                {
-                    function = globalFunction;
-                }
-                else
-                {
-                    var funcExpr = _scopeManager.LookupVariable(node.FunctionName).AsFunction();
-                    function = new FunctionDefinition(null, funcExpr.Parameters, funcExpr.Body); // Convert to FunctionDefinition
-                }
-            }
-            else if (node.Expression is FunctionExpression funcExpr)
-            {
-                function = new FunctionDefinition(null, funcExpr.Parameters, funcExpr.Body); // Convert inline function
-            }
-            else if (node.Expression is IndexerExpression indexExpr)
-            {
-                // Resolve function stored in a list
-                funcExpr = indexExpr.Accept(this).AsFunction();
-                function = new FunctionDefinition(null, funcExpr.Parameters, funcExpr.Body);
-            }
-
-            if (function is null)
-                throw new Exception($"Function not found: {node.FunctionName ?? "anonymous function"}");
-
-            // Enter function scope
-            _scopeManager.EnterScope();
-
-            // Save execution context
-            int previousLoopDepth = _context.LoopDepth;
-            _context.LoopDepth = 0;
-            var previousFlowState = _context.FlowState;
-            _context.FlowState = ControlFlowState.Normal;
-
-            // Bind function arguments
-            for (int i = 0; i < node.Arguments.Count; i++)
-            {
-                var argValue = node.Arguments[i].Accept(this);
-                _scopeManager.SetVariable(function.Parameters[i], argValue, true);
-            }
-
-            // Execute function body
-            function.Body.Accept(this);
-
-            // Retrieve return value
-            Value returnValue = (_context.FlowState == ControlFlowState.Return)
-                ? _context.LastReturnValue
-                : Value.None();
-
-            // Restore previous execution context and exit function scope
-            _context.LoopDepth = previousLoopDepth;
-            _context.FlowState = previousFlowState;
-            _scopeManager.ExitScope();
-
-            return returnValue;
-        }
-
-        public void Visit(FunctionDefinition node)
-        {
-            if (_intrinsicFunctions.ContainsKey(node.FunctionName!))
-                throw new Exception($"Function name '{node.FunctionName}' is reserved for built-in functions.");
-
-            _functions[node.FunctionName!] = node;
-        }
-
+        
         private Value HandleIncrementDecrement(UnaryOperatorExpression node, Value operandResult)
         {
             var op = node.Operator;
@@ -706,10 +402,8 @@ namespace Betty.Core.Interpreter
                     Value.FromNumber(newValue) : Value.FromNumber(currentValue);
             }
 
-            // Check if the operand is an element access in a list
             if (node.Operand is IndexerExpression indexer)
             {
-                // Ensure the list and index are valid
                 var listResult = indexer.Collection.Accept(this);
                 var indexResult = indexer.Index.Accept(this);
                 if (listResult.Type != ValueType.List || indexResult.Type != ValueType.Number)
@@ -720,7 +414,6 @@ namespace Betty.Core.Interpreter
                 if (index < 0 || index >= list.Count)
                     throw new IndexOutOfRangeException("List index out of range.");
 
-                // Ensure the target element is a number or a character
                 if (list[index].Type != ValueType.Number
                     && list[index].Type != ValueType.Char)
                     throw new InvalidOperationException(
@@ -734,10 +427,8 @@ namespace Betty.Core.Interpreter
                     _ => throw new InvalidOperationException($"Unsupported {fixity} assignment operator {op}")
                 };
 
-                // Update the list element
                 list[index] = Value.FromNumber(newValue);
 
-                // Depending on whether it's prefix or postfix, return the new or old value
                 return node.Fixity == OperatorFixity.Prefix ?
                     Value.FromNumber(newValue) : Value.FromNumber(currentValue);
             }

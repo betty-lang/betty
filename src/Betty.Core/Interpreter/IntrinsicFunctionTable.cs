@@ -1,50 +1,48 @@
-﻿using Betty.Core.AST;
-using static Betty.Core.Interpreter.IntrinsicFunctions;
+using Betty.Core.AST;
+using Betty.Core.Interpreter.IntrinsicFunctions;
 
 namespace Betty.Core.Interpreter
 {
     public partial class Interpreter
     {
-        private delegate Value IntrinsicFunctionHandler(FunctionCall call, IExpressionVisitor visitor);
-
-        private static readonly Dictionary<string, IntrinsicFunctionHandler> _intrinsicFunctions = new()
+        private static readonly Dictionary<string, IntrinsicFunction> _intrinsicFunctions = new()
         {
             // IO
-            { "print", PrintFunction },
-            { "println", PrintFunction },
-            { "input", InputFunction },
+            { "print", new PrintFunction() },
+            { "println", new PrintFunction() },
+            { "input", new InputFunction() },
 
             // Conversion
-            { "tostr", ToStringFunction },
-            { "tobool", ToBooleanFunction },
-            { "tonum", ToNumberFunction },
-            { "tochar", ToCharFunction },
-            { "tolist", ToListFunction },
+            { "tostr", new ToStringFunction() },
+            { "tobool", new ToBooleanFunction() },
+            { "tonum", new ToNumberFunction() },
+            { "tochar", new ToCharFunction() },
+            { "tolist", new ToListFunction() },
 
             // String
-            { "concat", ConcatFunction },
-            { "len", LengthFunction },
-
+            { "concat", new ConcatFunction() },
+            
             // Char
-            { "isdigit", IsDigitFunction },
-            { "isspace", IsSpaceFunction },
+            { "isdigit", new IsDigitFunction() },
+            { "isspace", new IsSpaceFunction() },
 
             // List
-            { "append", AppendFunction },
-            { "range", RangeFunction },
-            { "remove", RemoveFunction },
-            { "removeat", RemoveAtFunction },
-            { "clone", CloneFunction },
+            { "append", new AppendFunction() },
+            { "range", new RangeFunction() },
+            { "remove", new RemoveFunction() },
+            { "removeat", new RemoveAtFunction() },
+            { "clone", new CloneFunction() },
+            { "len", new LengthFunction() },
 
             // Math
-            { "sin", SinFunction },
-            { "cos", CosFunction },
-            { "tan", TanFunction },
-            { "abs", AbsFunction },
-            { "pow", PowFunction },
-            { "sqrt", SqrtFunction },
-            { "floor", FloorFunction },
-            { "ceil", CeilFunction },
+            { "sin", new SinFunction() },
+            { "cos", new CosFunction() },
+            { "tan", new TanFunction() },
+            { "abs", new AbsFunction() },
+            { "pow", new PowFunction() },
+            { "sqrt", new SqrtFunction() },
+            { "floor", new FloorFunction() },
+            { "ceil", new CeilFunction() },
         };
     }
 }

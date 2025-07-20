@@ -1,21 +1,20 @@
-﻿using Betty.Core.AST;
+using Betty.Core.AST;
 
-namespace Betty.Core.Interpreter
+namespace Betty.Core.Interpreter.IntrinsicFunctions
 {
-    public static partial class IntrinsicFunctions
+    public class PowFunction : IntrinsicFunction
     {
-        public static Value PowFunction(FunctionCall call, IExpressionVisitor visitor)
+        public PowFunction() : base("pow") { }
+
+        public override Value Execute(IExpressionVisitor visitor, FunctionCall call)
         {
-            if (call.Arguments.Count != 2)
-            {
-                throw new ArgumentException($"{call.FunctionName} function requires two numeric arguments.");
-            }
+            ValidateArgumentCount(call, 2);
 
             var baseValue = call.Arguments[0].Accept(visitor);
             var exponentValue = call.Arguments[1].Accept(visitor);
             if (baseValue.Type != ValueType.Number || exponentValue.Type != ValueType.Number)
             {
-                throw new ArgumentException($"Arguments for {call.FunctionName} must be numbers.");
+                throw new ArgumentException($"Arguments for {Name} must be numbers.");
             }
 
             double result = Math.Pow(baseValue.AsNumber(), exponentValue.AsNumber());

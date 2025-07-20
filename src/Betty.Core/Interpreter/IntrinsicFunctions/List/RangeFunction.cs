@@ -1,15 +1,14 @@
-﻿using Betty.Core.AST;
+using Betty.Core.AST;
 
-namespace Betty.Core.Interpreter
+namespace Betty.Core.Interpreter.IntrinsicFunctions
 {
-    public static partial class IntrinsicFunctions
+    public class RangeFunction : IntrinsicFunction
     {
-        public static Value RangeFunction(FunctionCall call, IExpressionVisitor visitor)
+        public RangeFunction() : base("range") { }
+
+        public override Value Execute(IExpressionVisitor visitor, FunctionCall call)
         {
-            if (call.Arguments.Count != 2)
-            {
-                throw new ArgumentException("range function requires exactly two arguments: a start and an end.");
-            }
+            ValidateArgumentCount(call, 2);
 
             var start = call.Arguments[0].Accept(visitor);
             if (start.Type != ValueType.Number)

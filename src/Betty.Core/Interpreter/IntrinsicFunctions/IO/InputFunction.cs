@@ -1,24 +1,21 @@
-﻿using Betty.Core.AST;
+using Betty.Core.AST;
 
-namespace Betty.Core.Interpreter
+namespace Betty.Core.Interpreter.IntrinsicFunctions
 {
-    public static partial class IntrinsicFunctions
+    public class InputFunction : IntrinsicFunction
     {
-        public static Value InputFunction(FunctionCall call, IExpressionVisitor visitor)
-        {
-            if (call.Arguments.Count > 1)
-            {
-                throw new Exception($"{call.FunctionName} function requires at most one argument, which can be a prompt string.");
-            }
+        public InputFunction() : base("input") { }
 
-            // If an argument is provided, use the visitor to evaluate it and display as a prompt
+        public override Value Execute(IExpressionVisitor visitor, FunctionCall call)
+        {
+            ValidateArgumentCount(call, 0, 1);
+
             if (call.Arguments.Count == 1)
             {
                 var promptValue = call.Arguments[0].Accept(visitor);
                 Console.Write(promptValue.AsString());
             }
 
-            // Read input from the user
             string userInput = Console.ReadLine() ?? string.Empty;
 
             return Value.FromString(userInput);

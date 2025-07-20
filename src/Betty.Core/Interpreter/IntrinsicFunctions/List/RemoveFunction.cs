@@ -1,15 +1,14 @@
-﻿using Betty.Core.AST;
+using Betty.Core.AST;
 
-namespace Betty.Core.Interpreter
+namespace Betty.Core.Interpreter.IntrinsicFunctions
 {
-    public static partial class IntrinsicFunctions
+    public class RemoveFunction : IntrinsicFunction
     {
-        public static Value RemoveFunction(FunctionCall call, IExpressionVisitor visitor)
+        public RemoveFunction() : base("remove") { }
+
+        public override Value Execute(IExpressionVisitor visitor, FunctionCall call)
         {
-            if (call.Arguments.Count != 2)
-            {
-                throw new ArgumentException("remove function requires exactly two arguments: a list and an element to remove.");
-            }
+            ValidateArgumentCount(call, 2);
 
             var listResult = call.Arguments[0].Accept(visitor);
             if (listResult.Type != ValueType.List)
@@ -21,7 +20,6 @@ namespace Betty.Core.Interpreter
             var list = listResult.AsList();
             list.Remove(element);
 
-            // Return the modified list as a new Value.
             return Value.FromList(new List<Value>(list));
         }
     }

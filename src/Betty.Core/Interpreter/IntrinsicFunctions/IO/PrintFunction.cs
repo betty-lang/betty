@@ -1,13 +1,15 @@
-﻿using Betty.Core.AST;
+using Betty.Core.AST;
+using System.Text;
 
-namespace Betty.Core.Interpreter
+namespace Betty.Core.Interpreter.IntrinsicFunctions
 {
-    public static partial class IntrinsicFunctions
+    public class PrintFunction : IntrinsicFunction
     {
-        public static Value PrintFunction(FunctionCall call, IExpressionVisitor visitor)
+        public PrintFunction() : base("print") { }
+
+        public override Value Execute(IExpressionVisitor visitor, FunctionCall call)
         {
-            // Concatenate all arguments into a single string
-            var stringBuilder = new System.Text.StringBuilder();
+            var stringBuilder = new StringBuilder();
 
             foreach (var arg in call.Arguments)
             {

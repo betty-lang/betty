@@ -28,6 +28,7 @@
         GreaterThanOrEqual, NotEqual,
 
         // Special tokens
+        Error,
         EOF
     }
 

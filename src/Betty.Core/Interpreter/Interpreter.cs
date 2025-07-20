@@ -1,19 +1,24 @@
 using Betty.Core.AST;
+using Betty.Core.AST.Expressions;
 using Betty.Core.Interpreter.IntrinsicFunctions;
 
 namespace Betty.Core.Interpreter
 {
-    public partial class Interpreter(Parser parser) : IStatementVisitor, IExpressionVisitor
+    public partial class Interpreter : IStatementVisitor<Value>, IExpressionVisitor<Value>
     {
-        private readonly Parser _parser = parser;
+        private readonly Program _ast;
         private readonly Dictionary<string, FunctionDefinition> _functions = [];
         private readonly ScopeManager _scopeManager = new();
         private readonly InterpreterContext _context = new();
 
+        public Interpreter(Program ast)
+        {
+            _ast = ast;
+        }
+
         public Value Interpret()
         {
-            var tree = _parser.Parse();
-            return tree.Accept(this);
+            return _ast.Accept(this);
         }
 
         public Value Visit(Program node)
@@ -103,7 +108,7 @@ namespace Betty.Core.Interpreter
             return conditionResult ? node.TrueExpression.Accept(this) : node.FalseExpression.Accept(this);
         }
 
-        public void Visit(ReturnStatement node)
+        public Value Visit(ReturnStatement node)
         {
             if (node.ReturnValue != null)
             {
@@ -114,24 +119,27 @@ namespace Betty.Core.Interpreter
                 _context.LastReturnValue = Value.None();
             }
             _context.FlowState = ControlFlowState.Return;
+            return Value.None();
         }
 
-        public void Visit(BreakStatement node)
+        public Value Visit(BreakStatement node)
         {
             if (!_context.IsInLoop)
             {
                 throw new Exception("Break statement not inside a loop");
             }
             _context.FlowState = ControlFlowState.Break;
+            return Value.None();
         }
 
-        public void Visit(ContinueStatement node)
+        public Value Visit(ContinueStatement node)
         {
             if (!_context.IsInLoop)
             {
                 throw new Exception("Continue statement not inside a loop");
             }
             _context.FlowState = ControlFlowState.Continue;
+            return Value.None();
         }
 
         private bool HandleLoopControlFlow()
@@ -151,7 +159,7 @@ namespace Betty.Core.Interpreter
         }
 
 
-        public void Visit(DoWhileStatement node)
+        public Value Visit(DoWhileStatement node)
         {
             _context.EnterLoop();
             _scopeManager.EnterScope();
@@ -164,9 +172,10 @@ namespace Betty.Core.Interpreter
 
             _scopeManager.ExitScope();
             _context.ExitLoop();
+            return Value.None();
         }
 
-        public void Visit(ForEachStatement node)
+        public Value Visit(ForEachStatement node)
         {
             var iterableValue = node.Iterable.Accept(this); // Evaluate the iterable expression
 
@@ -190,9 +199,10 @@ namespace Betty.Core.Interpreter
 
             _scopeManager.ExitScope();
             _context.ExitLoop(); // Exit the loop context
+            return Value.None();
         }
 
-        public void Visit(ForStatement node)
+        public Value Visit(ForStatement node)
         {
             node.Initializer?.Accept(this);
 
@@ -208,9 +218,10 @@ namespace Betty.Core.Interpreter
 
             _scopeManager.ExitScope();
             _context.ExitLoop();
+            return Value.None();
         }
 
-        public void Visit(WhileStatement node)
+        public Value Visit(WhileStatement node)
         {
             _context.EnterLoop();
             _scopeManager.EnterScope();
@@ -223,9 +234,10 @@ namespace Betty.Core.Interpreter
 
             _scopeManager.ExitScope();
             _context.ExitLoop();
+            return Value.None();
         }
 
-        public void Visit(IfStatement node)
+        public Value Visit(IfStatement node)
         {
             var conditionResult = node.Condition.Accept(this).AsBoolean();
 
@@ -257,6 +269,7 @@ namespace Betty.Core.Interpreter
                     _scopeManager.ExitScope();
                 }
             }
+            return Value.None();
         }
 
         public Value Visit(BinaryOperatorExpression node) => HandleBinaryExpression(node);
@@ -267,7 +280,7 @@ namespace Betty.Core.Interpreter
         public Value Visit(CharLiteral node) => Value.FromChar(node.Value);
         public Value Visit(FunctionExpression node) => Value.FromFunction(node);
 
-        public void Visit(CompoundStatement node)
+        public Value Visit(CompoundStatement node)
         {
             _scopeManager.EnterScope();
 
@@ -282,6 +295,7 @@ namespace Betty.Core.Interpreter
             }
 
             _scopeManager.ExitScope();
+            return Value.None();
         }
 
         private static Value ApplyCompoundOperation(Value left, Value right, TokenType operatorType)
@@ -375,7 +389,7 @@ namespace Betty.Core.Interpreter
 
         public Value Visit(Variable node) => _scopeManager.LookupVariable(node.Name);
 
-        public void Visit(EmptyStatement node) { }
+        public Value Visit(EmptyStatement node) => Value.None();
         
         private Value HandleIncrementDecrement(UnaryOperatorExpression node, Value operandResult)
         {
@@ -460,6 +474,17 @@ namespace Betty.Core.Interpreter
             }
         }
 
-        public void Visit(ExpressionStatement node) => node.Expression.Accept(this);
+        public Value Visit(ExpressionStatement node)
+        {
+            node.Expression.Accept(this);
+            return Value.None();
+        }
+
+        public Value Visit(ErrorExpression node)
+        {
+            // This should not be called.
+            // The interpreter should not try to evaluate an error expression.
+            throw new NotImplementedException();
+        }
     }
 }

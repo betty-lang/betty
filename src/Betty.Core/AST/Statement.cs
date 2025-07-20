@@ -2,6 +2,6 @@
 {
     public abstract class Statement
     {
-        public abstract void Accept(IStatementVisitor visitor);
+        public abstract T Accept<T>(IStatementVisitor<T> visitor);
     }
 }

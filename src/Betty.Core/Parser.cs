@@ -1,18 +1,42 @@
 ﻿using Betty.Core.AST;
+using Betty.Core.AST.Expressions;
+using Betty.Core.Errors;
 using Expression = Betty.Core.AST.Expression;
 
 namespace Betty.Core
 {
     public class Parser
     {
-        private readonly Lexer _lexer;
+        private readonly List<Token> _tokens;
+        private int _currentTokenIndex;
         private Token _currentToken;
         private readonly HashSet<string> _definedFunctions = [];
+        public List<Error> Errors { get; } = [];
 
-        public Parser(Lexer lexer)
+        public Parser(List<Token> tokens)
         {
-            _lexer = lexer;
-            _currentToken = _lexer.GetNextToken(); // Set current token to the first token from the input
+            _tokens = tokens;
+            _currentTokenIndex = 0;
+            _currentToken = _tokens[0];
+        }
+
+        private void Advance()
+        {
+            if (_currentTokenIndex < _tokens.Count - 1)
+            {
+                _currentTokenIndex++;
+                _currentToken = _tokens[_currentTokenIndex];
+            }
+        }
+
+        private Token Peek(int offset = 1)
+        {
+            var index = _currentTokenIndex + offset;
+            if (index < _tokens.Count)
+            {
+                return _tokens[index];
+            }
+            return _tokens.Last();
         }
 
         private static readonly HashSet<TokenType> _assignmentOperators = new()
@@ -67,11 +91,39 @@ namespace Betty.Core
         {
             if (_currentToken.Type == tokenType)
             {
-                _currentToken = _lexer.GetNextToken();
+                Advance();
             }
             else
             {
-                throw new Exception($"Unexpected token: Expected {tokenType}, found {_currentToken.Type} at line {_currentToken.Line}, column {_currentToken.Column}");
+                Errors.Add(new Error($"Unexpected token: Expected {tokenType}, found {_currentToken.Type}", _currentToken.Line, _currentToken.Column));
+                Synchronize();
+            }
+        }
+
+        private void Synchronize()
+        {
+            Advance();
+
+            while (_currentToken.Type != TokenType.EOF)
+            {
+                if (_currentToken.Type == TokenType.Semicolon)
+                {
+                    Advance();
+                    return;
+                }
+
+                switch (_currentToken.Type)
+                {
+                    case TokenType.Func:
+                    case TokenType.If:
+                    case TokenType.For:
+                    case TokenType.ForEach:
+                    case TokenType.While:
+                    case TokenType.Return:
+                        return;
+                }
+
+                Advance();
             }
         }
 
@@ -167,7 +219,7 @@ namespace Betty.Core
             Consume(TokenType.LBracket); // Consume the opening bracket
 
             // Check if the list is actually a range
-            if (_lexer.PeekNextToken().Type == TokenType.DotDot)
+            if (Peek().Type == TokenType.DotDot)
                 return ParseRange();
 
             var elements = ParseSeparatedList<Expression>(TokenType.Comma, TokenType.RBracket, () => ParseExpression());
@@ -231,7 +283,7 @@ namespace Betty.Core
                 case TokenType.CharLiteral:
                 case TokenType.StringLiteral:
                     expr = ParseLiteral(token);
-                    Consume(token.Type);
+                    Advance();
                     break;
 
                 // Boolean keywords
@@ -239,7 +291,7 @@ namespace Betty.Core
                 case TokenType.False:
                     {
                         expr = new BooleanExpression(token.Type == TokenType.True);
-                        Consume(token.Type);
+                        Advance();
                         break;
                     }
 
@@ -254,13 +306,13 @@ namespace Betty.Core
                 case TokenType.Not:
                 case TokenType.Increment:
                 case TokenType.Decrement:
-                    Consume(token.Type);
+                    Advance();
                     expr = new UnaryOperatorExpression(ParsePrimary(), token.Type, OperatorFixity.Prefix);
                     break;
 
                 // Parenthesized expressions
                 case TokenType.LParen:
-                    Consume(TokenType.LParen);
+                    Advance();
                     expr = ParseExpression();
                     Consume(TokenType.RParen);
                     break;
@@ -268,7 +320,7 @@ namespace Betty.Core
                 // Variables or function call placeholders
                 case TokenType.Identifier:
                     expr = new Variable((string)token.Value!);
-                    Consume(TokenType.Identifier);
+                    Advance();
                     break;
 
                 // Function expression
@@ -282,7 +334,9 @@ namespace Betty.Core
                     break;
 
                 default:
-                    throw new Exception($"Unexpected token: {token.Type}");
+                    Errors.Add(new Error($"Unexpected token: {token.Type}", token.Line, token.Column));
+                    Synchronize();
+                    return new ErrorExpression();
             }
 
             return expr;
@@ -542,8 +596,10 @@ namespace Betty.Core
             Consume(TokenType.Identifier); // Function name
 
             // Check for duplicate function definition
-            if (!_definedFunctions.Add(functionName)) // Try to add the function name to the set
-                throw new Exception($"Function '{functionName}' is already defined.");
+            if (!_definedFunctions.Add(functionName))
+            {
+                Errors.Add(new Error($"Function '{functionName}' is already defined.", _currentToken.Line, _currentToken.Column));
+            }
 
             Consume(TokenType.LParen); // Opening parenthesis
             var parameters = ParseParameters();
@@ -561,12 +617,13 @@ namespace Betty.Core
                 if (_currentToken.Type == TokenType.Identifier)
                 {
                     string paramName = (string)_currentToken.Value!;
-                    Consume(TokenType.Identifier);
+                    Advance();
                     return paramName;
                 }
                 else
                 {
-                    throw new Exception($"Expected an identifier, found {_currentToken.Type}.");
+                    Errors.Add(new Error($"Expected an identifier, found {_currentToken.Type}.", _currentToken.Line, _currentToken.Column));
+                    return "";
                 }
             });
         }
@@ -611,7 +668,10 @@ namespace Betty.Core
                     functions.Add(ParseFunctionDefinition());
                 }
                 else
-                    throw new Exception("Unexpected token: " + _currentToken.Type);
+                {
+                    Errors.Add(new Error("Unexpected token: " + _currentToken.Type, _currentToken.Line, _currentToken.Column));
+                    Synchronize();
+                }
             }
 
             return new Program(globals, functions);
@@ -622,7 +682,9 @@ namespace Betty.Core
             var node = ParseProgram();
 
             if (_currentToken.Type != TokenType.EOF)
-                throw new Exception($"Unexpected token: {_currentToken.Type}");
+            {
+                Errors.Add(new Error($"Unexpected token: {_currentToken.Type}", _currentToken.Line, _currentToken.Column));
+            }
 
             return node;
         }

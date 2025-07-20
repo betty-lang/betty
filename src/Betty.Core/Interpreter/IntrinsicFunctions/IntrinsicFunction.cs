@@ -11,7 +11,7 @@ namespace Betty.Core.Interpreter.IntrinsicFunctions
             Name = name;
         }
 
-        public abstract Value Execute(IExpressionVisitor visitor, FunctionCall call);
+        public abstract Value Execute(IExpressionVisitor<Value> visitor, FunctionCall call);
 
         protected void ValidateArgumentCount(FunctionCall call, int expectedCount)
         {

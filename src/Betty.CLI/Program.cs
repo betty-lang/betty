@@ -1,5 +1,6 @@
 ﻿using Betty.Core;
 using Betty.Core.Interpreter;
+using BettyProgram = Betty.Core.AST.Program;
 
 namespace Betty.CLI
 {
@@ -25,8 +26,36 @@ namespace Betty.CLI
             {
                 string source = File.ReadAllText(path);
                 var lexer = new Lexer(source);
-                var parser = new Parser(lexer);
-                var interpreter = new Interpreter(parser);
+                var tokens = lexer.GetTokens();
+
+                if (lexer.Errors.Count > 0)
+                {
+                    foreach (var error in lexer.Errors)
+                    {
+                        Console.WriteLine(error);
+                    }
+                    return;
+                }
+
+                var parser = new Parser(tokens);
+                var ast = parser.Parse();
+
+                if (parser.Errors.Count > 0)
+                {
+                    foreach (var error in parser.Errors)
+                    {
+                        Console.WriteLine(error);
+                    }
+                    return;
+                }
+
+                if (ast is not BettyProgram programNode)
+                {
+                    Console.WriteLine("Fatal error: Could not parse the input into a valid program structure.");
+                    return;
+                }
+
+                var interpreter = new Interpreter(programNode);
                 interpreter.Interpret();
             }
             catch (Exception ex)
@@ -125,8 +154,36 @@ namespace Betty.CLI
 
                 // Create lexer, parser, and interpreter
                 var lexer = new Lexer(source);
-                var parser = new Parser(lexer);
-                var interpreter = new Interpreter(parser);
+                var tokens = lexer.GetTokens();
+
+                if (lexer.Errors.Count > 0)
+                {
+                    foreach (var error in lexer.Errors)
+                    {
+                        Console.WriteLine(error);
+                    }
+                    return;
+                }
+
+                var parser = new Parser(tokens);
+                var ast = parser.Parse();
+
+                if (parser.Errors.Count > 0)
+                {
+                    foreach (var error in parser.Errors)
+                    {
+                        Console.WriteLine(error);
+                    }
+                    return;
+                }
+
+                if (ast is not BettyProgram programNode)
+                {
+                    Console.WriteLine("Fatal error: Could not parse the input into a valid program structure.");
+                    return;
+                }
+
+                var interpreter = new Interpreter(programNode);
 
                 // Run the program
                 Console.WriteLine("--- Program Output ---");

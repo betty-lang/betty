@@ -13,7 +13,9 @@
                 }
             ";
 
-            var parser = new Parser(new Lexer(code));
+            var lexer = new Lexer(code);
+            var tokens = lexer.GetTokens();
+            var parser = new Parser(tokens);
             var programNode = parser.Parse() as Program;
 
             // Assert that the program node is not null

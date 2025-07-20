@@ -6,7 +6,7 @@ namespace Betty.Core.Interpreter.IntrinsicFunctions
     {
         public RemoveFunction() : base("remove") { }
 
-        public override Value Execute(IExpressionVisitor visitor, FunctionCall call)
+        public override Value Execute(IExpressionVisitor<Value> visitor, FunctionCall call)
         {
             ValidateArgumentCount(call, 2);
 

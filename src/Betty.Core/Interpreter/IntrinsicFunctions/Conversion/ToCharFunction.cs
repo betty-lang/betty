@@ -1,15 +1,14 @@
-﻿using Betty.Core.AST;
+using Betty.Core.AST;
 
-namespace Betty.Core.Interpreter
-{ 
-    public static partial class IntrinsicFunctions
+namespace Betty.Core.Interpreter.IntrinsicFunctions
+{
+    public class ToCharFunction : IntrinsicFunction
     {
-        public static Value ToCharFunction(FunctionCall call, IExpressionVisitor visitor)
+        public ToCharFunction() : base("tochar") { }
+
+        public override Value Execute(IExpressionVisitor visitor, FunctionCall call)
         {
-            if (call.Arguments.Count != 1)
-            {
-                throw new ArgumentException($"{call.FunctionName} function requires exactly one argument.");
-            }
+            ValidateArgumentCount(call, 1);
 
             var argResult = call.Arguments[0].Accept(visitor);
 
@@ -22,11 +21,11 @@ namespace Betty.Core.Interpreter
                     {
                         throw new ArgumentException($"Number {number} is outside the valid range for characters.");
                     }
-                    charValue = (char)number; // Safely cast now that we've checked the range.
+                    charValue = (char)number;
                     break;
 
                 case ValueType.Char:
-                    return argResult; // No conversion needed.
+                    return argResult;
 
                 case ValueType.String:
                     var stringValue = argResult.AsString();

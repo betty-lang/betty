@@ -1,26 +1,24 @@
-﻿using Betty.Core.AST;
+using Betty.Core.AST;
 
-namespace Betty.Core.Interpreter
+namespace Betty.Core.Interpreter.IntrinsicFunctions
 {
-    public static partial class IntrinsicFunctions
+    public class IsDigitFunction : IntrinsicFunction
     {
-        public static Value IsDigitFunction(FunctionCall call, IExpressionVisitor visitor)
-        {
-            // Ensure that only one argument is provided
-            if (call.Arguments.Count != 1)
-                throw new Exception($"{call.FunctionName} function requires exactly one argument.");
+        public IsDigitFunction() : base("isdigit") { }
 
-            // Use the visitor to evaluate the argument
+        public override Value Execute(IExpressionVisitor visitor, FunctionCall call)
+        {
+            ValidateArgumentCount(call, 1);
+
             var argResult = call.Arguments[0].Accept(visitor);
 
             if (argResult.Type == ValueType.Char)
             {
-                // Return whether the character is a digit
                 var isDigit = char.IsDigit(argResult.AsChar());
                 return Value.FromBoolean(isDigit);
             }
 
-            throw new Exception($"{call.FunctionName} function is not defined for the given argument type.");
+            throw new Exception($"{Name} function is not defined for the given argument type.");
         }
     }
 }

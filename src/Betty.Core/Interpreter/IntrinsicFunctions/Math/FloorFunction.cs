@@ -1,20 +1,19 @@
-﻿using Betty.Core.AST;
+using Betty.Core.AST;
 
-namespace Betty.Core.Interpreter
+namespace Betty.Core.Interpreter.IntrinsicFunctions
 {
-    public static partial class IntrinsicFunctions
+    public class FloorFunction : IntrinsicFunction
     {
-        public static Value FloorFunction(FunctionCall call, IExpressionVisitor visitor)
+        public FloorFunction() : base("floor") { }
+
+        public override Value Execute(IExpressionVisitor visitor, FunctionCall call)
         {
-            if (call.Arguments.Count != 1)
-            {
-                throw new ArgumentException($"{call.FunctionName} function requires exactly one numeric argument.");
-            }
+            ValidateArgumentCount(call, 1);
 
             var argValue = call.Arguments[0].Accept(visitor);
             if (argValue.Type != ValueType.Number)
             {
-                throw new ArgumentException($"Argument for {call.FunctionName} must be a number.");
+                throw new ArgumentException($"Argument for {Name} must be a number.");
             }
 
             double result = Math.Floor(argValue.AsNumber());

@@ -1,4 +1,4 @@
-﻿namespace Betty.Core.Interpreter
+namespace Betty.Core.Interpreter
 {
     public enum ControlFlowState
     {
@@ -14,24 +14,36 @@
         public Value LastReturnValue { get; set; } = Value.None();
         public int LoopDepth { get; set; } = 0;
 
-        // Method to enter a new loop, increasing loop depth
         public void EnterLoop() => LoopDepth++;
 
-        // Method to exit a loop, decreasing loop depth
         public void ExitLoop()
         {
             if (LoopDepth > 0)
             {
                 LoopDepth--;
             }
-            else
-            {
-                // If not in a loop, throw an exception
-                throw new InvalidOperationException("Attempted to exit loop when not in a loop.");
-            }
         }
 
-        // Check if currently inside a loop
         public bool IsInLoop => LoopDepth > 0;
+
+        public (ControlFlowState, int) EnterFunction()
+        {
+            var previousState = (FlowState, LoopDepth);
+            FlowState = ControlFlowState.Normal;
+            LoopDepth = 0;
+            return previousState;
+        }
+
+        public void Restore((ControlFlowState flowState, int loopDepth) context)
+        {
+            (FlowState, LoopDepth) = context;
+        }
+
+        public Value GetReturnValue()
+        {
+            var returnValue = (FlowState == ControlFlowState.Return) ? LastReturnValue : Value.None();
+            FlowState = ControlFlowState.Normal; // Reset flow state after getting value
+            return returnValue;
+        }
     }
 }

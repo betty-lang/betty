@@ -1,15 +1,14 @@
-﻿using Betty.Core.AST;
+using Betty.Core.AST;
 
-namespace Betty.Core.Interpreter
+namespace Betty.Core.Interpreter.IntrinsicFunctions
 {
-    public static partial class IntrinsicFunctions
+    public class ToListFunction : IntrinsicFunction
     {
-        public static Value ToListFunction(FunctionCall call, IExpressionVisitor visitor)
+        public ToListFunction() : base("tolist") { }
+
+        public override Value Execute(IExpressionVisitor visitor, FunctionCall call)
         {
-            if (call.Arguments.Count != 1)
-            {
-                throw new ArgumentException($"{call.FunctionName} function requires exactly one argument.");
-            }
+            ValidateArgumentCount(call, 1);
 
             var argResult = call.Arguments[0].Accept(visitor);
 

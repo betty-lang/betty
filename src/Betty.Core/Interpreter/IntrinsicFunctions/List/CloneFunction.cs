@@ -1,26 +1,16 @@
-﻿using Betty.Core.AST;
+using Betty.Core.AST;
 
-namespace Betty.Core.Interpreter
+namespace Betty.Core.Interpreter.IntrinsicFunctions
 {
-    public static partial class IntrinsicFunctions
+    public class CloneFunction : IntrinsicFunction
     {
-        public static Value CloneFunction(FunctionCall call, IExpressionVisitor visitor)
+        public CloneFunction() : base("clone") { }
+
+        public override Value Execute(IExpressionVisitor visitor, FunctionCall call)
         {
-            if (call.Arguments.Count != 1)
-            {
-                throw new ArgumentException("clone function requires exactly one argument: a list to clone.");
-            }
-
-            var listResult = call.Arguments[0].Accept(visitor);
-
-            // Allow cloning of lists
-            if (listResult.Type != ValueType.List)
-            {
-                throw new InvalidOperationException("The argument of clone must be a list.");
-            }
-
-            // Use the DeepCopy method to create a completely independent copy
-            return Value.DeepCopy(listResult);
+            ValidateArgumentCount(call, 1);
+            var valueToClone = call.Arguments[0].Accept(visitor);
+            return valueToClone.Clone();
         }
     }
 }

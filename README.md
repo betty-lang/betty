@@ -2,6 +2,9 @@
 
 ---
 
+> ⚠️ **This is the old tree-walk interpreter for Betty.**
+It has been replaced by a new bytecode-based VM: [betty](https://github.com/betty-lang/betty)
+
 Betty is a dynamic programming language designed for prototyping purposes. It supports various data types, has a standard library, and offers a simple and intuitive syntax. For more information, please refer to the [official Betty documentation](https://betty-lang.github.io/betty-docs/).
 
 ## Quick Start

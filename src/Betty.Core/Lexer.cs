@@ -26,7 +26,10 @@
             ["do"] = TokenType.Do,
             ["break"] = TokenType.Break,
             ["continue"] = TokenType.Continue,
-            ["return"] = TokenType.Return
+            ["return"] = TokenType.Return,
+            ["switch"] = TokenType.Switch,
+            ["case"] = TokenType.Case,
+            ["default"] = TokenType.Default
         };
 
         private static readonly Dictionary<char, TokenType> _singleCharOperators = new()

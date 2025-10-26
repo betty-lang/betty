@@ -37,6 +37,51 @@ namespace Betty.Core.Interpreter
             throw new Exception("No main function found.");
         }
 
+        public void Visit(SwitchStatement node)
+        {
+            var switchValue = node.Expression.Accept(this);
+            bool shouldExecute = false;
+
+            _context.EnterSwitch(); // Track that we're in a switch
+
+            foreach (var switchCase in node.Cases)
+            {
+                // Check if this case matches (or if we're falling through)
+                if (switchCase.CaseExpression == null) // default case
+                {
+                    shouldExecute = true;
+                }
+                else if (!shouldExecute) // only check if we haven't matched yet
+                {
+                    var caseValue = switchCase.CaseExpression.Accept(this);
+                    shouldExecute = switchValue == caseValue;
+                }
+
+                // Execute case body if we should
+                if (shouldExecute)
+                {
+                    foreach (var statement in switchCase.Statements)
+                    {
+                        statement.Accept(this);
+
+                        // Check for control flow changes
+                        if (_context.FlowState == ControlFlowState.Break)
+                        {
+                            _context.FlowState = ControlFlowState.Normal; // Consume the break
+                            return; // Exit the switch
+                        }
+                        else if (_context.FlowState != ControlFlowState.Normal)
+                        {
+                            return; // Return or continue, exit switch
+                        }
+                    }
+                    // If we reach here, fall through to next case
+                }
+            }
+
+            _context.ExitSwitch(); // Exit switch context
+        }
+
         public Value Visit(IfExpression node)
         {
             var conditionResult = node.Condition.Accept(this).AsBoolean();
@@ -117,9 +162,9 @@ namespace Betty.Core.Interpreter
 
         public void Visit(BreakStatement node)
         {
-            if (!_context.IsInLoop)
+            if (!_context.CanBreak)
             {
-                throw new Exception("Break statement not inside a loop");
+                throw new Exception("Break statement must be inside a loop or switch statement");
             }
             _context.FlowState = ControlFlowState.Break;
         }

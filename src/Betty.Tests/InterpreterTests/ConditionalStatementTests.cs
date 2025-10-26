@@ -3,6 +3,169 @@
     public class ConditionalStatementTests : InterpreterTestBase
     {
         [Fact]
+        public void SwitchStatement_MixedBracedAndUnbraced()
+        {
+            var code = @"
+        x = 2;
+        result = 0;
+        switch (x) {
+            case 1:
+                result = 10;
+                break;
+            case 2: {
+                temp = 15;
+                result = temp + 5;
+                break;
+            }
+            case 3:
+                result = 30;
+                break;
+        }
+        return result;
+    ";
+            var interpreter = SetupInterpreter(code);
+            var result = interpreter.Interpret();
+            Assert.Equal(20.0, result.AsNumber());
+        }
+
+        [Fact]
+        public void SwitchStatement_FallThroughSharesScope()
+        {
+            var code = @"
+        x = 1;
+        result = 0;
+        switch (x) {
+            case 1:
+                x = 2;
+                temp = 50;
+                # no break - falls through
+            case 2:
+                result = temp + 10;  # Uses temp from case 1
+                break;
+        }
+        return result;
+    ";
+            var interpreter = SetupInterpreter(code);
+            var result = interpreter.Interpret();
+            Assert.Equal(60.0, result.AsNumber());  // temp (50) + 10 = 60
+        }
+
+        [Fact]
+        public void SwitchStatement_CompoundWithScopedVariables()
+        {
+            var code = @"
+        x = 1;
+        result = 0;
+        switch (x) {
+            case 1: {
+                temp = 100;
+                result = temp;
+                break;
+            }
+            case 2: {
+                temp = 200;
+                result = temp;
+                break;
+            }
+        }
+        return result;
+    ";
+            var interpreter = SetupInterpreter(code);
+            var result = interpreter.Interpret();
+            // temp is scoped inside the braces, so we return it via result
+            Assert.Equal(100.0, result.AsNumber());
+        }
+
+        [Fact]
+        public void SwitchStatement_BreakInCases()
+        {
+            var code = @"
+                x = 1;
+                switch (x) {
+                    case 1:
+                        x = 2;
+                        break;
+                    case 2:
+                        x = 3;
+                        break;
+                    case 3:
+                        x = 4;
+                        break;
+                    default:
+                        x = 100;
+                }
+                return x;
+            ";
+            var interpreter = SetupInterpreter(code);
+            var result = interpreter.Interpret();
+            Assert.Equal(2.0, result.AsNumber());
+        }
+
+        [Fact]
+        public void SwitchStatement_FallThroughCases()
+        {
+            var code = @"
+                x = 1;
+                switch (x) {
+                    case 1:
+                        x = 2;
+                    case 2:
+                        x = 3;
+                    case 3:
+                        x = 4;
+                    default:
+                        x = 100;
+                }
+                return x;
+            ";
+            var interpreter = SetupInterpreter(code);
+            var result = interpreter.Interpret();
+            Assert.Equal(100.0, result.AsNumber());
+        }
+
+        [Fact]
+        public void SwitchStatement_DefaultCaseExecuted()
+        {
+            var code = @"
+                x = 5;
+                switch (x) {
+                    case 1:
+                        return 10;
+                    case 2:
+                        return 20;
+                    case 3:
+                        return 30;
+                    default:
+                        return 40;
+                }
+            ";
+            var interpreter = SetupInterpreter(code);
+            var result = interpreter.Interpret();
+            Assert.Equal(40.0, result.AsNumber());
+        }
+
+        [Fact]
+        public void SwitchStatement_ExecutesCorrectCase()
+        {
+            var code = @"
+                x = 2;
+                switch (x) {
+                    case 1:
+                        return 10;
+                    case 2:
+                        return 20;
+                    case 3:
+                        return 30;
+                    default:
+                        return 40;
+                }
+            ";
+            var interpreter = SetupInterpreter(code);
+            var result = interpreter.Interpret();
+            Assert.Equal(20.0, result.AsNumber());
+        }
+
+        [Fact]
         public void NestedWhileLoops_ContinueStatement_OutsideInnerIf()
         {
             var code = @"

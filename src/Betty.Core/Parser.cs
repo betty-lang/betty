@@ -491,18 +491,31 @@ namespace Betty.Core
                 Consume(TokenType.Case);
                 var caseExpression = ParseExpression();
                 Consume(TokenType.Colon);
-                var caseBody = ParseStatementList();
+                var caseBody = ParseSwitchCaseBody();
                 cases.Add(new SwitchCase(caseExpression, caseBody));
             }
             if (_currentToken.Type == TokenType.Default)
             {
                 Consume(TokenType.Default);
                 Consume(TokenType.Colon);
-                var defaultBody = ParseStatementList();
+                var defaultBody = ParseSwitchCaseBody();
                 cases.Add(new SwitchCase(null, defaultBody));
             }
             Consume(TokenType.RBrace);
             return new SwitchStatement(switchExpression, cases);
+        }
+
+        private List<Statement> ParseSwitchCaseBody()
+        {
+            var statements = new List<Statement>();
+            while (_currentToken.Type != TokenType.Case &&
+                   _currentToken.Type != TokenType.Default &&
+                   _currentToken.Type != TokenType.RBrace &&
+                   _currentToken.Type != TokenType.EOF)
+            {
+                statements.Add(ParseStatement());
+            }
+            return statements;
         }
 
         private Statement ParseStatement()

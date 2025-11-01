@@ -478,6 +478,46 @@ namespace Betty.Core
             return new ForEachStatement(variableName, listExpression, body);
         }
 
+        private SwitchStatement ParseSwitchStatement()
+        {
+            Consume(TokenType.Switch);
+            Consume(TokenType.LParen);
+            var switchExpression = ParseExpression();
+            Consume(TokenType.RParen);
+            Consume(TokenType.LBrace);
+            var cases = new List<SwitchCase>();
+            while (_currentToken.Type == TokenType.Case)
+            {
+                Consume(TokenType.Case);
+                var caseExpression = ParseExpression();
+                Consume(TokenType.Colon);
+                var caseBody = ParseSwitchCaseBody();
+                cases.Add(new SwitchCase(caseExpression, caseBody));
+            }
+            if (_currentToken.Type == TokenType.Default)
+            {
+                Consume(TokenType.Default);
+                Consume(TokenType.Colon);
+                var defaultBody = ParseSwitchCaseBody();
+                cases.Add(new SwitchCase(null, defaultBody));
+            }
+            Consume(TokenType.RBrace);
+            return new SwitchStatement(switchExpression, cases);
+        }
+
+        private List<Statement> ParseSwitchCaseBody()
+        {
+            var statements = new List<Statement>();
+            while (_currentToken.Type != TokenType.Case &&
+                   _currentToken.Type != TokenType.Default &&
+                   _currentToken.Type != TokenType.RBrace &&
+                   _currentToken.Type != TokenType.EOF)
+            {
+                statements.Add(ParseStatement());
+            }
+            return statements;
+        }
+
         private Statement ParseStatement()
         {
             return _currentToken.Type switch
@@ -492,6 +532,7 @@ namespace Betty.Core
                 TokenType.Continue => ParseContinueStatement(),
                 TokenType.Return => ParseReturnStatement(),
                 TokenType.Semicolon => ParseEmptyStatement(),
+                TokenType.Switch => ParseSwitchStatement(),
                 _ => ParseExpressionStatement()
             };
         }

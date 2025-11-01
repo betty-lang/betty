@@ -37,6 +37,29 @@ namespace Betty.Core.Interpreter
             throw new Exception("No main function found.");
         }
 
+        public Value Visit(SwitchExpression node)
+        {
+            var switchValue = node.Expression.Accept(this);
+            foreach (var switchCase in node.Cases)
+            {
+                // Check if this case matches
+                if (switchCase.CaseExpression == null) // default case
+                {
+                    return switchCase.ResultExpression.Accept(this);
+                }
+                else
+                {
+                    var caseValue = switchCase.CaseExpression.Accept(this);
+                    if (switchValue == caseValue)
+                    {
+                        return switchCase.ResultExpression.Accept(this);
+                    }
+                }
+            }
+            // If no cases matched, return None
+            return Value.None();
+        }
+
         public void Visit(SwitchStatement node)
         {
             var switchValue = node.Expression.Accept(this);
@@ -518,7 +541,12 @@ namespace Betty.Core.Interpreter
         public Value Visit(NumberLiteral node) => Value.FromNumber(node.Value);
         public Value Visit(StringLiteral node) => Value.FromString(node.Value);
         public Value Visit(CharLiteral node) => Value.FromChar(node.Value);
-        public Value Visit(FunctionExpression node) => Value.FromFunction(node);
+        public Value Visit(FunctionExpression node)
+        {
+            // Capture current scope
+            var capturedScope = _scopeManager.GetAllVariables();
+            return Value.FromFunction(node, capturedScope);
+        }
 
         public void Visit(CompoundStatement node)
         {
@@ -646,6 +674,7 @@ namespace Betty.Core.Interpreter
         public Value Visit(FunctionCall node)
         {
             FunctionDefinition? function = null;
+            Dictionary<string, Value>? capturedScope = null;
 
             // Resolve function reference
             if (node.FunctionName is not null)
@@ -656,22 +685,29 @@ namespace Betty.Core.Interpreter
                 if (_functions.TryGetValue(node.FunctionName, out var globalFunction))
                 {
                     function = globalFunction;
+                    // Global functions don't have captured scopes (or capture empty scope)
+                    capturedScope = new Dictionary<string, Value>();
                 }
                 else
                 {
-                    var funcExpr = _scopeManager.LookupVariable(node.FunctionName).AsFunction();
-                    function = new FunctionDefinition(null, funcExpr.Parameters, funcExpr.Body); // Convert to FunctionDefinition
+                    var funcValue = _scopeManager.LookupVariable(node.FunctionName).AsFunction();
+                    function = new FunctionDefinition(null, funcValue.Expression.Parameters, funcValue.Expression.Body);
+                    capturedScope = funcValue.CapturedScope;
                 }
             }
             else if (node.Expression is FunctionExpression funcExpr)
             {
-                function = new FunctionDefinition(null, funcExpr.Parameters, funcExpr.Body); // Convert inline function
+                // Handle inline function expressions like (func() { ... })()
+                // These are evaluated on the spot, so capture current scope
+                var funcValue = funcExpr.Accept(this).AsFunction();
+                function = new FunctionDefinition(null, funcValue.Expression.Parameters, funcValue.Expression.Body);
+                capturedScope = funcValue.CapturedScope;
             }
-            else if (node.Expression is IndexerExpression indexExpr)
+            else if (node.Expression is IndexerExpression or FunctionCall)
             {
-                // Resolve function stored in a list
-                funcExpr = indexExpr.Accept(this).AsFunction();
-                function = new FunctionDefinition(null, funcExpr.Parameters, funcExpr.Body);
+                var funcValue = node.Expression.Accept(this).AsFunction();
+                function = new FunctionDefinition(null, funcValue.Expression.Parameters, funcValue.Expression.Body);
+                capturedScope = funcValue.CapturedScope;
             }
 
             if (function is null)
@@ -680,13 +716,22 @@ namespace Betty.Core.Interpreter
             // Enter function scope
             _scopeManager.EnterScope();
 
+            // Restore captured scope FIRST (use isFunctionParam = false so they can be reassigned)
+            if (capturedScope != null)
+            {
+                foreach (var kvp in capturedScope)
+                {
+                    _scopeManager.SetVariable(kvp.Key, kvp.Value, false);
+                }
+            }
+
             // Save execution context
             int previousLoopDepth = _context.LoopDepth;
             _context.LoopDepth = 0;
             var previousFlowState = _context.FlowState;
             _context.FlowState = ControlFlowState.Normal;
 
-            // Bind function arguments
+            // Bind function arguments (these CAN shadow captured variables)
             for (int i = 0; i < node.Arguments.Count; i++)
             {
                 var argValue = node.Arguments[i].Accept(this);

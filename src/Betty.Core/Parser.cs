@@ -183,7 +183,7 @@ namespace Betty.Core
             // Step 1: Handle primary expressions and unary operators
             Expression expr = ParsePrefix();
 
-            // Step 2: Loop to handle postfix operations (function calls, indexers, postfix operators)
+            // Step 2: Loop to handle postfix operations (function calls, indexers, postfix operators, switch expressions)
             while (true)
             {
                 switch (_currentToken.Type)
@@ -206,11 +206,52 @@ namespace Betty.Core
                         expr = new UnaryOperatorExpression(expr, operatorToken.Type, OperatorFixity.Postfix);
                         break;
 
+                    case TokenType.Switch:
+                        // Switch expression (postfix operation)
+                        expr = ParseSwitchExpression(expr);
+                        break;
+
                     default:
                         // No postfix operation, return the expression
                         return expr;
                 }
             }
+        }
+
+        private SwitchExpression ParseSwitchExpression(Expression expr)
+        {
+            Consume(TokenType.Switch);
+            Consume(TokenType.LBrace);
+            var cases = new List<SwitchExpressionCase>();
+            while (_currentToken.Type != TokenType.RBrace)
+            {
+                if (_currentToken.Type == TokenType.Underscore)  // Checking for default '_'
+                    break;  // Stop parsing regular cases if we encounter '_'
+
+                var condition = ParseExpression();
+                Consume(TokenType.Arrow);
+
+                var caseResult = ParseExpression();
+
+                cases.Add(new SwitchExpressionCase(condition, caseResult));
+
+                if (_currentToken.Type == TokenType.Comma)
+                {
+                    Consume(TokenType.Comma); // Consume comma between cases
+                }
+            }
+
+            // Handle default case if present
+            if (_currentToken.Type == TokenType.Underscore) // Default case indicated by '_'
+            {
+                Consume(TokenType.Underscore);
+                Consume(TokenType.Arrow);
+                var defaultResult = ParseExpression();
+                cases.Add(new SwitchExpressionCase(null, defaultResult));
+            }
+
+            Consume(TokenType.RBrace);
+            return new SwitchExpression(expr, cases);
         }
 
         private Expression ParsePrefix()

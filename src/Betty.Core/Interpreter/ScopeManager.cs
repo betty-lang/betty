@@ -71,5 +71,23 @@
 
             throw new Exception($"Variable '{name}' is not defined in any (active) scope.");
         }
+
+        // Captures all currently accessible variables
+        public Dictionary<string, Value> GetAllVariables()
+        {
+            var result = new Dictionary<string, Value>(_globals);
+
+            // Add local scopes from outermost to innermost
+            // so inner scopes override outer ones
+            foreach (var scope in _scopes.Reverse())
+            {
+                foreach (var kvp in scope)
+                {
+                    result[kvp.Key] = kvp.Value;
+                }
+            }
+
+            return result;
+        }
     }
 }

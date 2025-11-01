@@ -19,5 +19,6 @@ namespace Betty.Core.AST
         Value Visit(ListLiteral node);
         Value Visit(FunctionExpression node);
         Value Visit(IfExpression node);
+        Value Visit(SwitchExpression node);
     }
 }

@@ -7,7 +7,6 @@ namespace Betty.Core
     {
         private readonly Lexer _lexer;
         private Token _currentToken;
-        private readonly HashSet<string> _definedFunctions = [];
 
         public Parser(Lexer lexer)
         {
@@ -574,6 +573,7 @@ namespace Betty.Core
                 TokenType.Return => ParseReturnStatement(),
                 TokenType.Semicolon => ParseEmptyStatement(),
                 TokenType.Switch => ParseSwitchStatement(),
+                TokenType.Func => ParseFunctionDefinition(),
                 _ => ParseExpressionStatement()
             };
         }
@@ -628,10 +628,6 @@ namespace Betty.Core
             Consume(TokenType.Func);
             string functionName = (string)_currentToken.Value!;
             Consume(TokenType.Identifier); // Function name
-
-            // Check for duplicate function definition
-            if (!_definedFunctions.Add(functionName)) // Try to add the function name to the set
-                throw new Exception($"Function '{functionName}' is already defined.");
 
             Consume(TokenType.LParen); // Opening parenthesis
             var parameters = ParseParameters();

@@ -5,6 +5,8 @@
         private readonly Dictionary<string, Value> _globals = new();
         private readonly Stack<Dictionary<string, Value>> _scopes = new();
 
+        public bool IsGlobalScope => _scopes.Count == 0;
+
         public void EnterScope()
         {
             _scopes.Push([]);
@@ -40,16 +42,25 @@
             }
 
             // If the variable is not a function parameter and is not found in any scope, check the globals
-            if (!isFunctionParam & _globals.ContainsKey(name))
+            if (!isFunctionParam && _globals.ContainsKey(name))
             {
                 // Update the global variable if it exists
                 _globals[name] = value;
                 return;
             }
 
-            // Otherwise, declare the variable in the current (innermost) scope
-            var currentScope = _scopes.Peek();
-            currentScope[name] = value;
+            // Otherwise, declare the variable in the current scope
+            if (_scopes.Count > 0)
+            {
+                // We're in a local scope - add to innermost scope
+                var currentScope = _scopes.Peek();
+                currentScope[name] = value;
+            }
+            else
+            {
+                // We're at global level - add to globals
+                _globals[name] = value;
+            }
         }
 
         public Value LookupVariable(string name)
@@ -76,17 +87,32 @@
         public Dictionary<string, Value> GetAllVariables()
         {
             var result = new Dictionary<string, Value>(_globals);
-
             // Add local scopes from outermost to innermost
             // so inner scopes override outer ones
-            foreach (var scope in _scopes.Reverse())
+            foreach (var scope in _scopes)
             {
                 foreach (var kvp in scope)
                 {
                     result[kvp.Key] = kvp.Value;
                 }
             }
+            return result;
+        }
 
+        // Captures only local variables (excludes globals)
+        public Dictionary<string, Value>? GetLocalVariables()
+        {
+            if (_scopes.Count == 0)
+                return null; // No local scope to capture
+
+            var result = new Dictionary<string, Value>();
+            foreach (var scope in _scopes)
+            {
+                foreach (var kvp in scope)
+                {
+                    result[kvp.Key] = kvp.Value;
+                }
+            }
             return result;
         }
     }

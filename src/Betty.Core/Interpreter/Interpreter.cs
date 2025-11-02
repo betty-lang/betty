@@ -5,7 +5,6 @@ namespace Betty.Core.Interpreter
     public partial class Interpreter(Parser parser) : IStatementVisitor, IExpressionVisitor
     {
         private readonly Parser _parser = parser;
-        private readonly Dictionary<string, FunctionDefinition> _functions = [];
         private readonly ScopeManager _scopeManager = new();
         private readonly InterpreterContext _context = new();
 
@@ -21,20 +20,26 @@ namespace Betty.Core.Interpreter
             foreach (var global in node.Globals)
                 _scopeManager.DeclareGlobal(global, Value.None()); // Initialize to None
 
-            // Visit each function definition and store it in a dictionary
+            // Visit each function definition and store it in the scope
             foreach (var function in node.Functions)
                 function.Accept(this);
 
-            if (_functions.TryGetValue("main", out var mainFunction))
+            // Look for main function in the scope manager
+            try
             {
-                if (mainFunction.Parameters.Count != 0)
+                var mainValue = _scopeManager.LookupVariable("main");
+                var mainFunction = mainValue.AsFunction();
+
+                if (mainFunction.Expression.Parameters.Count != 0)
                     throw new Exception("main() function cannot have parameters.");
 
                 // Execute the main function
-                return Visit(new FunctionCall([], functionName : "main"));
+                return Visit(new FunctionCall([], functionName: "main"));
             }
-            
-            throw new Exception("No main function found.");
+            catch
+            {
+                throw new Exception("No main function found.");
+            }
         }
 
         public Value Visit(SwitchExpression node)
@@ -679,26 +684,18 @@ namespace Betty.Core.Interpreter
             // Resolve function reference
             if (node.FunctionName is not null)
             {
+                // Check intrinsics first
                 if (_intrinsicFunctions.TryGetValue(node.FunctionName, out var intrinsicFunction))
                     return intrinsicFunction.Invoke(node, this);
 
-                if (_functions.TryGetValue(node.FunctionName, out var globalFunction))
-                {
-                    function = globalFunction;
-                    // Global functions don't have captured scopes (or capture empty scope)
-                    capturedScope = new Dictionary<string, Value>();
-                }
-                else
-                {
-                    var funcValue = _scopeManager.LookupVariable(node.FunctionName).AsFunction();
-                    function = new FunctionDefinition(null, funcValue.Expression.Parameters, funcValue.Expression.Body);
-                    capturedScope = funcValue.CapturedScope;
-                }
+                // Look up function as a variable in the scope chain
+                var funcValue = _scopeManager.LookupVariable(node.FunctionName).AsFunction();
+                function = new FunctionDefinition(null, funcValue.Expression.Parameters, funcValue.Expression.Body);
+                capturedScope = funcValue.CapturedScope;
             }
             else if (node.Expression is FunctionExpression funcExpr)
             {
                 // Handle inline function expressions like (func() { ... })()
-                // These are evaluated on the spot, so capture current scope
                 var funcValue = funcExpr.Accept(this).AsFunction();
                 function = new FunctionDefinition(null, funcValue.Expression.Parameters, funcValue.Expression.Body);
                 capturedScope = funcValue.CapturedScope;
@@ -759,7 +756,20 @@ namespace Betty.Core.Interpreter
             if (_intrinsicFunctions.ContainsKey(node.FunctionName!))
                 throw new Exception($"Function name '{node.FunctionName}' is reserved for built-in functions.");
 
-            _functions[node.FunctionName!] = node;
+            // Capture scope for closures
+            // If we're at global level, only capture locals (null means access globals dynamically)
+            // If we're in a nested scope, capture everything (locals + globals at that point)
+            Dictionary<string, Value>? capturedScope = _scopeManager.IsGlobalScope
+                ? null  // Global-level functions access globals dynamically
+                : _scopeManager.GetAllVariables(); // Nested functions capture full scope
+
+            var functionValue = Value.FromFunction(
+                new FunctionExpression(node.Parameters, node.Body),
+                capturedScope
+            );
+
+            // Store the function in the current scope (allows shadowing)
+            _scopeManager.SetVariable(node.FunctionName!, functionValue, false);
         }
 
         public Value Visit(UnaryOperatorExpression node)

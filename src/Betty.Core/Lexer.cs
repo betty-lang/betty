@@ -26,7 +26,11 @@
             ["do"] = TokenType.Do,
             ["break"] = TokenType.Break,
             ["continue"] = TokenType.Continue,
-            ["return"] = TokenType.Return
+            ["return"] = TokenType.Return,
+            ["switch"] = TokenType.Switch,
+            ["case"] = TokenType.Case,
+            ["default"] = TokenType.Default,
+            ["_"] = TokenType.Underscore
         };
 
         private static readonly Dictionary<char, TokenType> _singleCharOperators = new()
@@ -71,7 +75,8 @@
             ["^="] = TokenType.CaretEqual,
             ["%="] = TokenType.ModEqual,
             ["//"] = TokenType.IntDiv,
-            ["//="] = TokenType.IntDivEqual
+            ["//="] = TokenType.IntDivEqual,
+            ["=>"] = TokenType.Arrow
         };
 
         public Lexer(string input)

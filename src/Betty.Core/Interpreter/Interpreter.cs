@@ -5,7 +5,6 @@ namespace Betty.Core.Interpreter
     public partial class Interpreter(Parser parser) : IStatementVisitor, IExpressionVisitor
     {
         private readonly Parser _parser = parser;
-        private readonly Dictionary<string, FunctionDefinition> _functions = [];
         private readonly ScopeManager _scopeManager = new();
         private readonly InterpreterContext _context = new();
 
@@ -21,20 +20,94 @@ namespace Betty.Core.Interpreter
             foreach (var global in node.Globals)
                 _scopeManager.DeclareGlobal(global, Value.None()); // Initialize to None
 
-            // Visit each function definition and store it in a dictionary
+            // Visit each function definition and store it in the scope
             foreach (var function in node.Functions)
                 function.Accept(this);
 
-            if (_functions.TryGetValue("main", out var mainFunction))
+            // Look for main function in the scope manager
+            try
             {
-                if (mainFunction.Parameters.Count != 0)
+                var mainValue = _scopeManager.LookupVariable("main");
+                var mainFunction = mainValue.AsFunction();
+
+                if (mainFunction.Expression.Parameters.Count != 0)
                     throw new Exception("main() function cannot have parameters.");
 
                 // Execute the main function
-                return Visit(new FunctionCall([], functionName : "main"));
+                return Visit(new FunctionCall([], functionName: "main"));
             }
-            
-            throw new Exception("No main function found.");
+            catch
+            {
+                throw new Exception("No main function found.");
+            }
+        }
+
+        public Value Visit(SwitchExpression node)
+        {
+            var switchValue = node.Expression.Accept(this);
+            foreach (var switchCase in node.Cases)
+            {
+                // Check if this case matches
+                if (switchCase.CaseExpression == null) // default case
+                {
+                    return switchCase.ResultExpression.Accept(this);
+                }
+                else
+                {
+                    var caseValue = switchCase.CaseExpression.Accept(this);
+                    if (switchValue == caseValue)
+                    {
+                        return switchCase.ResultExpression.Accept(this);
+                    }
+                }
+            }
+            // If no cases matched, return None
+            return Value.None();
+        }
+
+        public void Visit(SwitchStatement node)
+        {
+            var switchValue = node.Expression.Accept(this);
+            bool shouldExecute = false;
+
+            _context.EnterSwitch(); // Track that we're in a switch
+
+            foreach (var switchCase in node.Cases)
+            {
+                // Check if this case matches (or if we're falling through)
+                if (switchCase.CaseExpression == null) // default case
+                {
+                    shouldExecute = true;
+                }
+                else if (!shouldExecute) // only check if we haven't matched yet
+                {
+                    var caseValue = switchCase.CaseExpression.Accept(this);
+                    shouldExecute = switchValue == caseValue;
+                }
+
+                // Execute case body if we should
+                if (shouldExecute)
+                {
+                    foreach (var statement in switchCase.Statements)
+                    {
+                        statement.Accept(this);
+
+                        // Check for control flow changes
+                        if (_context.FlowState == ControlFlowState.Break)
+                        {
+                            _context.FlowState = ControlFlowState.Normal; // Consume the break
+                            return; // Exit the switch
+                        }
+                        else if (_context.FlowState != ControlFlowState.Normal)
+                        {
+                            return; // Return or continue, exit switch
+                        }
+                    }
+                    // If we reach here, fall through to next case
+                }
+            }
+
+            _context.ExitSwitch(); // Exit switch context
         }
 
         public Value Visit(IfExpression node)
@@ -117,9 +190,9 @@ namespace Betty.Core.Interpreter
 
         public void Visit(BreakStatement node)
         {
-            if (!_context.IsInLoop)
+            if (!_context.CanBreak)
             {
-                throw new Exception("Break statement not inside a loop");
+                throw new Exception("Break statement must be inside a loop or switch statement");
             }
             _context.FlowState = ControlFlowState.Break;
         }
@@ -473,7 +546,12 @@ namespace Betty.Core.Interpreter
         public Value Visit(NumberLiteral node) => Value.FromNumber(node.Value);
         public Value Visit(StringLiteral node) => Value.FromString(node.Value);
         public Value Visit(CharLiteral node) => Value.FromChar(node.Value);
-        public Value Visit(FunctionExpression node) => Value.FromFunction(node);
+        public Value Visit(FunctionExpression node)
+        {
+            // Capture current scope
+            var capturedScope = _scopeManager.GetAllVariables();
+            return Value.FromFunction(node, capturedScope);
+        }
 
         public void Visit(CompoundStatement node)
         {
@@ -601,32 +679,32 @@ namespace Betty.Core.Interpreter
         public Value Visit(FunctionCall node)
         {
             FunctionDefinition? function = null;
+            Dictionary<string, Value>? capturedScope = null;
 
             // Resolve function reference
             if (node.FunctionName is not null)
             {
+                // Check intrinsics first
                 if (_intrinsicFunctions.TryGetValue(node.FunctionName, out var intrinsicFunction))
                     return intrinsicFunction.Invoke(node, this);
 
-                if (_functions.TryGetValue(node.FunctionName, out var globalFunction))
-                {
-                    function = globalFunction;
-                }
-                else
-                {
-                    var funcExpr = _scopeManager.LookupVariable(node.FunctionName).AsFunction();
-                    function = new FunctionDefinition(null, funcExpr.Parameters, funcExpr.Body); // Convert to FunctionDefinition
-                }
+                // Look up function as a variable in the scope chain
+                var funcValue = _scopeManager.LookupVariable(node.FunctionName).AsFunction();
+                function = new FunctionDefinition(null, funcValue.Expression.Parameters, funcValue.Expression.Body);
+                capturedScope = funcValue.CapturedScope;
             }
             else if (node.Expression is FunctionExpression funcExpr)
             {
-                function = new FunctionDefinition(null, funcExpr.Parameters, funcExpr.Body); // Convert inline function
+                // Handle inline function expressions like (func() { ... })()
+                var funcValue = funcExpr.Accept(this).AsFunction();
+                function = new FunctionDefinition(null, funcValue.Expression.Parameters, funcValue.Expression.Body);
+                capturedScope = funcValue.CapturedScope;
             }
-            else if (node.Expression is IndexerExpression indexExpr)
+            else if (node.Expression is IndexerExpression or FunctionCall)
             {
-                // Resolve function stored in a list
-                funcExpr = indexExpr.Accept(this).AsFunction();
-                function = new FunctionDefinition(null, funcExpr.Parameters, funcExpr.Body);
+                var funcValue = node.Expression.Accept(this).AsFunction();
+                function = new FunctionDefinition(null, funcValue.Expression.Parameters, funcValue.Expression.Body);
+                capturedScope = funcValue.CapturedScope;
             }
 
             if (function is null)
@@ -635,13 +713,22 @@ namespace Betty.Core.Interpreter
             // Enter function scope
             _scopeManager.EnterScope();
 
+            // Restore captured scope FIRST (use isFunctionParam = false so they can be reassigned)
+            if (capturedScope != null)
+            {
+                foreach (var kvp in capturedScope)
+                {
+                    _scopeManager.SetVariable(kvp.Key, kvp.Value, false);
+                }
+            }
+
             // Save execution context
             int previousLoopDepth = _context.LoopDepth;
             _context.LoopDepth = 0;
             var previousFlowState = _context.FlowState;
             _context.FlowState = ControlFlowState.Normal;
 
-            // Bind function arguments
+            // Bind function arguments (these CAN shadow captured variables)
             for (int i = 0; i < node.Arguments.Count; i++)
             {
                 var argValue = node.Arguments[i].Accept(this);
@@ -669,7 +756,20 @@ namespace Betty.Core.Interpreter
             if (_intrinsicFunctions.ContainsKey(node.FunctionName!))
                 throw new Exception($"Function name '{node.FunctionName}' is reserved for built-in functions.");
 
-            _functions[node.FunctionName!] = node;
+            // Capture scope for closures
+            // If we're at global level, only capture locals (null means access globals dynamically)
+            // If we're in a nested scope, capture everything (locals + globals at that point)
+            Dictionary<string, Value>? capturedScope = _scopeManager.IsGlobalScope
+                ? null  // Global-level functions access globals dynamically
+                : _scopeManager.GetAllVariables(); // Nested functions capture full scope
+
+            var functionValue = Value.FromFunction(
+                new FunctionExpression(node.Parameters, node.Body),
+                capturedScope
+            );
+
+            // Store the function in the current scope (allows shadowing)
+            _scopeManager.SetVariable(node.FunctionName!, functionValue, false);
         }
 
         public Value Visit(UnaryOperatorExpression node)

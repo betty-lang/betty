@@ -13,11 +13,12 @@
 
         // Punctuation
         LParen, RParen, LBrace, RBrace, LBracket, RBracket, 
-        Semicolon, Comma, QuestionMark, Colon, DotDot,
+        Semicolon, Comma, QuestionMark, Colon, DotDot, Arrow,
 
         // Keywords/identifiers
         Func, Global, TrueKeyword, FalseKeyword, Identifier,
         If, Then, Elif, Else, For, ForEach, In, While, Do, Break, Continue, Return,
+        Switch, Case, Default, Underscore,
 
         // Assignment operators
         Equal, Increment, Decrement, PlusEqual, MinusEqual,

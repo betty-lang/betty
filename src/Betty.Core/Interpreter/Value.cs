@@ -44,7 +44,7 @@ namespace Betty.Core.Interpreter
         private readonly int _stringId;
         private readonly bool _boolean;
         private readonly ValueList? _list;
-        private readonly FunctionExpression? _function;
+        private readonly FunctionValue? _function;
 
         private Value(ValueType type) : this()
         {
@@ -76,7 +76,7 @@ namespace Betty.Core.Interpreter
             _list = list;
         }
 
-        private Value(FunctionExpression function) : this(ValueType.Function)
+        private Value(FunctionValue function) : this(ValueType.Function)
         {
             _function = function;
         }
@@ -91,7 +91,10 @@ namespace Betty.Core.Interpreter
         public static Value FromBoolean(bool boolean) => new Value(boolean);
         public static Value FromChar(char character) => new Value(character);
         public static Value FromList(List<Value> list) => new Value(new ValueList(list));
-        public static Value FromFunction(FunctionExpression function) => new Value(function);
+        public static Value FromFunction(FunctionExpression expression, Dictionary<string, Value> capturedScope)
+        {
+            return new Value(new FunctionValue(expression, capturedScope));
+        }
         public static Value None() => new Value(ValueType.None);
 
         public readonly char AsChar()
@@ -137,7 +140,7 @@ namespace Betty.Core.Interpreter
             };
         }
 
-        public readonly FunctionExpression AsFunction()
+        public readonly FunctionValue AsFunction()
         {
             if (Type != ValueType.Function)
                 throw new InvalidOperationException($"Expected a {ValueType.Function}, but got {Type}.");
@@ -146,25 +149,31 @@ namespace Betty.Core.Interpreter
 
         public static Value DeepCopy(Value value)
         {
-            return value.Type switch
+            switch (value.Type)
             {
-                // Primitive types are immutable, so they can be returned as-is
-                ValueType.Number => Value.FromNumber(value.AsNumber()),
-                ValueType.String => Value.FromString(value.AsString()),
-                ValueType.Boolean => Value.FromBoolean(value.AsBoolean()),
-                ValueType.Char => Value.FromChar(value.AsChar()),
-
-                // For lists, recursively deep copy each element
-                ValueType.List => Value.FromList(DeepCopyList(value.AsList())),
-
-                // Functions can be returned as-is
-                ValueType.Function => Value.FromFunction(value.AsFunction()),
-
-                // None type can be returned as-is
-                ValueType.None => Value.None(),
-
-                _ => throw new InvalidOperationException($"Unsupported type for deep copy: {value.Type}")
-            };
+                case ValueType.Number:
+                    return Value.FromNumber(value.AsNumber());
+                case ValueType.String:
+                    return Value.FromString(value.AsString());
+                case ValueType.Boolean:
+                    return Value.FromBoolean(value.AsBoolean());
+                case ValueType.Char:
+                    return Value.FromChar(value.AsChar());
+                case ValueType.List:
+                    return Value.FromList(DeepCopyList(value.AsList()));
+                case ValueType.Function:
+                    var func = value.AsFunction();
+                    var copiedScope = new Dictionary<string, Value>();
+                    foreach (var kvp in func.CapturedScope)
+                    {
+                        copiedScope[kvp.Key] = DeepCopy(kvp.Value);
+                    }
+                    return Value.FromFunction(func.Expression, copiedScope);
+                case ValueType.None:
+                    return Value.None();
+                default:
+                    throw new InvalidOperationException($"Unsupported type for deep copy: {value.Type}");
+            }
         }
 
         private static List<Value> DeepCopyList(List<Value> originalList)
@@ -210,7 +219,7 @@ namespace Betty.Core.Interpreter
                 ValueType.List => _list == null && other._list == null
                     || (_list != null && other._list != null &&
                         _list.Items.SequenceEqual(other._list.Items)),
-                ValueType.Function => _function == other._function,
+                ValueType.Function => _function == other._function,  // Reference equality
                 ValueType.None => true,
                 _ => throw new InvalidOperationException($"Unknown type {Type}.")
             };

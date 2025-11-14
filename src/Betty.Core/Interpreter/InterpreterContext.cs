@@ -13,6 +13,7 @@
         public ControlFlowState FlowState { get; set; } = ControlFlowState.Normal;
         public Value LastReturnValue { get; set; } = Value.None();
         public int LoopDepth { get; set; } = 0;
+        public int SwitchDepth { get; set; } = 0;
 
         // Method to enter a new loop, increasing loop depth
         public void EnterLoop() => LoopDepth++;
@@ -31,7 +32,23 @@
             }
         }
 
+        public void EnterSwitch() => SwitchDepth++;
+        public void ExitSwitch()
+        {
+            if (SwitchDepth > 0)
+            {
+                SwitchDepth--;
+            }
+            else
+            {
+                throw new InvalidOperationException("Attempted to exit switch when not in a switch.");
+            }
+        }
+
         // Check if currently inside a loop
         public bool IsInLoop => LoopDepth > 0;
+
+        public bool IsInSwitch => SwitchDepth > 0;
+        public bool CanBreak => IsInLoop || IsInSwitch;
     }
 }

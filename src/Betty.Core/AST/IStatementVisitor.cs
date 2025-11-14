@@ -14,5 +14,6 @@
         void Visit(FunctionDefinition node);
         void Visit(CompoundStatement node);
         void Visit(ExpressionStatement node);
+        void Visit(SwitchStatement node);
     }
 }

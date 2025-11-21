@@ -13,6 +13,13 @@ namespace Betty.Core.Interpreter
         public Value Interpret()
         {
             var tree = _parser.Parse();
+
+            // Don't execute if there were parse errors
+            if (_parser.Errors.Count > 0)
+            {
+                return Value.None();
+            }
+
             return tree.Accept(this);
         }
 

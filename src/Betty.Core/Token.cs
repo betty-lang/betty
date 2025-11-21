@@ -25,11 +25,12 @@
         MulEqual, DivEqual, CaretEqual, ModEqual, IntDivEqual,
 
         // Comparison operators
-        EqualEqual, LessThan, GreaterThan, LessThanOrEqual, 
+        EqualEqual, LessThan, GreaterThan, LessThanOrEqual,
         GreaterThanOrEqual, NotEqual,
 
         // Special tokens
-        EOF
+        EOF,
+        Error
     }
 
     public readonly struct Token(TokenType type, object? value = null, int line = 0, int column = 0)

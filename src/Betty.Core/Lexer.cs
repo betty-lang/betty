@@ -119,9 +119,11 @@
                 Advance();
         }
 
-        private string ScanStringLiteral()
+        private Token ScanStringLiteral()
         {
             _stringBuilder.Clear();
+            int startLine = _currentLine;
+            int startColumn = _currentColumn;
 
             Advance(); // Skip the opening quote
 
@@ -139,7 +141,7 @@
                         case '\\': _stringBuilder.Append('\\'); break; // Backslash
                         case '0': _stringBuilder.Append('\0'); break; // Null character
                         default:
-                            throw new Exception($"Unrecognized escape sequence: \\{_currentChar}");
+                            return new Token(TokenType.Error, $"Unrecognized escape sequence: \\{_currentChar}", startLine, startColumn);
                     }
                     Advance(); // Move past the character after the escape
                 }
@@ -150,14 +152,14 @@
                 }
 
                 if (_currentChar == '\0')
-                    throw new Exception("Unterminated string literal.");
+                    return new Token(TokenType.Error, "Unterminated string literal.", startLine, startColumn);
             }
 
             Advance(); // Skip the closing quote
-            return _stringBuilder.ToString();
+            return new Token(TokenType.StringLiteral, _stringBuilder.ToString(), startLine, startColumn);
         }
 
-        private double ScanNumberLiteral(bool hasLeadingDot)
+        private Token ScanNumberLiteral(bool hasLeadingDot, int startLine, int startColumn)
         {
             _stringBuilder.Clear();
 
@@ -173,12 +175,12 @@
             {
                 // Break if the next character is also a dot (range operator)
                 if (_currentChar == '.' && Peek() == '.')
-                    break; 
+                    break;
 
                 if (_currentChar == '.')
                 {
-                    if (dotEncountered) // Throw when encountering multiple dots
-                        throw new FormatException("Invalid numeric format with multiple dots.");
+                    if (dotEncountered) // Return error token when encountering multiple dots
+                        return new Token(TokenType.Error, "Invalid numeric format with multiple dots.", startLine, startColumn);
 
                     dotEncountered = true;
                 }
@@ -188,7 +190,10 @@
             }
 
             // Use invariant culture to parse numbers to ensure consistent behavior across different locales
-            return double.Parse(_stringBuilder.ToString(), System.Globalization.CultureInfo.InvariantCulture);
+            if (double.TryParse(_stringBuilder.ToString(), System.Globalization.CultureInfo.InvariantCulture, out double result))
+                return new Token(TokenType.NumberLiteral, result, startLine, startColumn);
+            else
+                return new Token(TokenType.Error, $"Invalid number format: {_stringBuilder}", startLine, startColumn);
         }
 
         private Token ScanIdentifierOrKeyword()
@@ -243,7 +248,7 @@
             return nextToken;
         }
 
-        private char ScanCharLiteral()
+        private Token ScanCharLiteral(int startLine, int startColumn)
         {
             Advance(); // Skip the opening quote
 
@@ -264,22 +269,29 @@
                     '\'' => '\'',   // Single quote
                     '\\' => '\\',   // Backslash
                     '0' => '\0',    // Null character
-                    _ => throw new Exception($"Unrecognized escape sequence: \\{_currentChar}"),
+                    _ => '\0'       // Placeholder for error case
                 };
+
+                if (_currentChar != 'n' && _currentChar != 't' && _currentChar != '"' &&
+                    _currentChar != '\'' && _currentChar != '\\' && _currentChar != '0')
+                {
+                    return new Token(TokenType.Error, $"Unrecognized escape sequence: \\{_currentChar}", startLine, startColumn);
+                }
             }
 
             if (!isEscapeChar && _currentChar == '\'') // Check for empty character literal
-                throw new Exception("Empty character literal.");
+                return new Token(TokenType.Error, "Empty character literal.", startLine, startColumn);
 
             Advance(); // Move past the character
 
             if (_currentChar != '\'') // Check for unterminated character literal
-                throw new Exception("Unterminated character literal.");
+                return new Token(TokenType.Error, "Unterminated character literal.", startLine, startColumn);
+
             Advance(); // Skip the closing quote
-            return charLiteral;
+            return new Token(TokenType.CharLiteral, charLiteral, startLine, startColumn);
         }
 
-        private Token ScanOperator()
+        private Token ScanOperator(int startLine, int startColumn)
         {
             // Start by building a two-character operator
             string multiCharOperator = _currentChar.ToString() + Peek();
@@ -296,12 +308,12 @@
                 if (_multiCharOperators.TryGetValue(multiCharOperator, out type))
                 {
                     Advance(3); // Move past the three-character operator
-                    return new Token(type, null, _currentLine, _currentColumn);
+                    return new Token(type, null, startLine, startColumn);
                 }
                 else
                 {
                     Advance(2); // Move past the two-character operator if no valid three-character operator found
-                    return new Token(twoCharTokenType, null, _currentLine, _currentColumn);
+                    return new Token(twoCharTokenType, null, startLine, startColumn);
                 }
             }
 
@@ -310,16 +322,22 @@
             if (_singleCharOperators.TryGetValue(_currentChar, out type))
             {
                 Advance(); // Move past the single character operator
-                return new Token(type, null, _currentLine, _currentColumn);
+                return new Token(type, null, startLine, startColumn);
             }
 
-            throw new Exception($"Unrecognized character: {_currentChar} at line {_currentLine}, column {_currentColumn}");
+            // Unrecognized character - return error token and advance
+            char errorChar = _currentChar;
+            Advance();
+            return new Token(TokenType.Error, $"Unrecognized character: '{errorChar}'", startLine, startColumn);
         }
 
         public Token GetNextToken()
         {
             while (_currentChar != '\0')
             {
+                int startLine = _currentLine;
+                int startColumn = _currentColumn;
+
                 if (Char.IsWhiteSpace(_currentChar))
                 {
                     SkipWhitespace();
@@ -336,18 +354,18 @@
                     return ScanIdentifierOrKeyword();
 
                 if (Char.IsDigit(_currentChar))
-                    return new Token(TokenType.NumberLiteral, ScanNumberLiteral(hasLeadingDot: false), _currentLine, _currentColumn);
+                    return ScanNumberLiteral(hasLeadingDot: false, startLine, startColumn);
 
                 if (_currentChar == '.' && Char.IsDigit(Peek()))
-                    return new Token(TokenType.NumberLiteral, ScanNumberLiteral(hasLeadingDot: true), _currentLine, _currentColumn);
+                    return ScanNumberLiteral(hasLeadingDot: true, startLine, startColumn);
 
                 if (_currentChar == '\'')
-                    return new Token(TokenType.CharLiteral, ScanCharLiteral(), _currentLine, _currentColumn);
+                    return ScanCharLiteral(startLine, startColumn);
 
                 if (_currentChar == '"')
-                    return new Token(TokenType.StringLiteral, ScanStringLiteral(), _currentLine, _currentColumn);
+                    return ScanStringLiteral();
 
-                return ScanOperator(); // This will throw if the character is not a valid operator
+                return ScanOperator(startLine, startColumn);
             }
 
             return new Token(TokenType.EOF);

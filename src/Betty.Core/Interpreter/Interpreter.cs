@@ -8,6 +8,8 @@ namespace Betty.Core.Interpreter
         private readonly ScopeManager _scopeManager = new();
         private readonly InterpreterContext _context = new();
 
+        public Parser Parser => _parser;
+
         public Value Interpret()
         {
             var tree = _parser.Parse();
@@ -853,5 +855,18 @@ namespace Betty.Core.Interpreter
         }
 
         public void Visit(ExpressionStatement node) => node.Expression.Accept(this);
+
+        public Value Visit(ErrorExpression node)
+        {
+            // Error nodes don't execute - they just return None
+            // The error has already been reported during parsing
+            return Value.None();
+        }
+
+        public void Visit(ErrorStatement node)
+        {
+            // Error nodes don't execute - errors were reported during parsing
+            // Just continue to the next statement
+        }
     }
 }

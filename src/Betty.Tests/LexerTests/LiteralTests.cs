@@ -21,25 +21,33 @@
         }
 
         [Fact]
-        public void GetNextToken_ThrowsExceptionForEmptyCharLiteral()
+        public void GetNextToken_ReturnsErrorForEmptyCharLiteral()
         {
             // Arrange
             var input = "''";
             var lexer = new Lexer(input);
 
-            // Act & Assert
-            Assert.Throws<Exception>(() => lexer.GetNextToken());
+            // Act
+            var token = lexer.GetNextToken();
+
+            // Assert
+            Assert.Equal(TokenType.Error, token.Type);
+            Assert.Contains("Empty character literal", (string)token.Value!);
         }
 
         [Fact]
-        public void GetNextToken_ThrowsExceptionForUnterminatedCharLiteral()
+        public void GetNextToken_ReturnsErrorForUnterminatedCharLiteral()
         {
             // Arrange
             var input = "'a";
             var lexer = new Lexer(input);
 
-            // Act & Assert
-            Assert.Throws<Exception>(() => lexer.GetNextToken());
+            // Act
+            var token = lexer.GetNextToken();
+
+            // Assert
+            Assert.Equal(TokenType.Error, token.Type);
+            Assert.Contains("Unterminated character literal", (string)token.Value!);
         }
 
         [Theory]
@@ -90,25 +98,33 @@
         }
 
         [Fact]
-        public void ScanStringLiteral_ThrowsExceptionForUnterminatedString()
+        public void ScanStringLiteral_ReturnsErrorForUnterminatedString()
         {
             // Arrange
             var input = "\"Hello";
             var lexer = new Lexer(input);
 
-            // Act & Assert
-            Assert.Throws<Exception>(() => lexer.GetNextToken());
+            // Act
+            var token = lexer.GetNextToken();
+
+            // Assert
+            Assert.Equal(TokenType.Error, token.Type);
+            Assert.Contains("Unterminated string literal", (string)token.Value!);
         }
 
         [Fact]
-        public void ScanStringLiteral_ThrowsExceptionForUnrecognizedEscapeSequence()
+        public void ScanStringLiteral_ReturnsErrorForUnrecognizedEscapeSequence()
         {
             // Arrange
             var input = "\"Hello\\x\"";
             var lexer = new Lexer(input);
 
-            // Act & Assert
-            Assert.Throws<Exception>(() => lexer.GetNextToken());
+            // Act
+            var token = lexer.GetNextToken();
+
+            // Assert
+            Assert.Equal(TokenType.Error, token.Type);
+            Assert.Contains("Unrecognized escape sequence", (string)token.Value!);
         }
     }
 }

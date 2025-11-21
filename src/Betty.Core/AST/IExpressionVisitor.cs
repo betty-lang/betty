@@ -20,5 +20,6 @@ namespace Betty.Core.AST
         Value Visit(FunctionExpression node);
         Value Visit(IfExpression node);
         Value Visit(SwitchExpression node);
+        Value Visit(ErrorExpression node);
     }
 }

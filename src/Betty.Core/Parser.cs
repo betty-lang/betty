@@ -7,6 +7,26 @@ namespace Betty.Core
     {
         private readonly Lexer _lexer;
         private Token _currentToken;
+        private readonly List<string> _errors = new();
+
+        // Synchronizing tokens for Panic Mode recovery
+        private static readonly HashSet<TokenType> _synchronizingTokens = new()
+        {
+            TokenType.Semicolon,
+            TokenType.RBrace,
+            TokenType.If,
+            TokenType.While,
+            TokenType.For,
+            TokenType.ForEach,
+            TokenType.Do,
+            TokenType.Switch,
+            TokenType.Return,
+            TokenType.Break,
+            TokenType.Continue,
+            TokenType.Func,
+        };
+
+        public IReadOnlyList<string> Errors => _errors;
 
         public Parser(Lexer lexer)
         {
@@ -62,20 +82,73 @@ namespace Betty.Core
             };
         }
 
+        private void ReportError(string message)
+        {
+            _errors.Add($"[Line {_currentToken.Line}, Column {_currentToken.Column}] {message}");
+        }
+
         private void Consume(TokenType tokenType)
         {
+            // Check for lexer errors first
+            if (_currentToken.Type == TokenType.Error)
+            {
+                ReportError((string)_currentToken.Value!);
+                _currentToken = _lexer.GetNextToken();
+                return;
+            }
+
             if (_currentToken.Type == tokenType)
             {
                 _currentToken = _lexer.GetNextToken();
             }
             else
             {
-                throw new Exception($"Unexpected token: Expected {tokenType}, found {_currentToken.Type} at line {_currentToken.Line}, column {_currentToken.Column}");
+                ReportError($"Expected {tokenType}, found {_currentToken.Type}");
+            }
+        }
+
+        private void Synchronize()
+        {
+            // Skip tokens until we find a synchronizing point
+            while (_currentToken.Type != TokenType.EOF &&
+                   !_synchronizingTokens.Contains(_currentToken.Type))
+            {
+                _currentToken = _lexer.GetNextToken();
+            }
+
+            // If we stopped at a semicolon, consume it to move past it
+            if (_currentToken.Type == TokenType.Semicolon)
+            {
+                _currentToken = _lexer.GetNextToken();
+            }
+        }
+
+        private void SynchronizeToClosingBrace()
+        {
+            int braceDepth = 1;
+            while (_currentToken.Type != TokenType.EOF && braceDepth > 0)
+            {
+                if (_currentToken.Type == TokenType.LBrace)
+                    braceDepth++;
+                else if (_currentToken.Type == TokenType.RBrace)
+                    braceDepth--;
+
+                if (braceDepth > 0)
+                    _currentToken = _lexer.GetNextToken();
             }
         }
 
         private Expression ParseExpression(int precedence = 0)
         {
+            // Handle error tokens from lexer before parsing
+            if (_currentToken.Type == TokenType.Error)
+            {
+                var errorToken = _currentToken;
+                ReportError((string)errorToken.Value!);
+                _currentToken = _lexer.GetNextToken();
+                return new ErrorExpression((string)errorToken.Value!, errorToken.Line, errorToken.Column);
+            }
+
             var left = ParsePrimary();
 
             while (true)
@@ -313,8 +386,19 @@ namespace Betty.Core
                     expr = ParseIfExpression();
                     break;
 
+                // Error token from lexer
+                case TokenType.Error:
+                    ReportError((string)token.Value!);
+                    Consume(TokenType.Error);
+                    expr = new ErrorExpression((string)token.Value!, token.Line, token.Column);
+                    break;
+
                 default:
-                    throw new Exception($"Unexpected token: {token.Type}");
+                    // Unexpected token - create error node and synchronize
+                    ReportError($"Unexpected token in expression: {token.Type}");
+                    _currentToken = _lexer.GetNextToken(); // Move past the bad token
+                    expr = new ErrorExpression($"Unexpected token: {token.Type}", token.Line, token.Column);
+                    break;
             }
 
             return expr;
@@ -560,29 +644,61 @@ namespace Betty.Core
 
         private Statement ParseStatement()
         {
-            return _currentToken.Type switch
+            // Handle error tokens from lexer
+            if (_currentToken.Type == TokenType.Error)
             {
-                TokenType.LBrace => ParseCompoundStatement(),
-                TokenType.If => ParseIfStatement(),
-                TokenType.For => ParseForStatement(),
-                TokenType.ForEach => ParseForEachStatement(),
-                TokenType.While => ParseWhileStatement(),
-                TokenType.Do => ParseDoWhileStatement(),
-                TokenType.Break => ParseBreakStatement(),
-                TokenType.Continue => ParseContinueStatement(),
-                TokenType.Return => ParseReturnStatement(),
-                TokenType.Semicolon => ParseEmptyStatement(),
-                TokenType.Switch => ParseSwitchStatement(),
-                TokenType.Func => ParseFunctionDefinition(),
-                _ => ParseExpressionStatement()
-            };
+                var errorToken = _currentToken;
+                ReportError((string)errorToken.Value!);
+                Consume(TokenType.Error);
+                Synchronize(); // Skip to next synchronizing point
+                return new ErrorStatement((string)errorToken.Value!, errorToken.Line, errorToken.Column);
+            }
+
+            try
+            {
+                return _currentToken.Type switch
+                {
+                    TokenType.LBrace => ParseCompoundStatement(),
+                    TokenType.If => ParseIfStatement(),
+                    TokenType.For => ParseForStatement(),
+                    TokenType.ForEach => ParseForEachStatement(),
+                    TokenType.While => ParseWhileStatement(),
+                    TokenType.Do => ParseDoWhileStatement(),
+                    TokenType.Break => ParseBreakStatement(),
+                    TokenType.Continue => ParseContinueStatement(),
+                    TokenType.Return => ParseReturnStatement(),
+                    TokenType.Semicolon => ParseEmptyStatement(),
+                    TokenType.Switch => ParseSwitchStatement(),
+                    TokenType.Func => ParseFunctionDefinition(),
+                    _ => ParseExpressionStatement()
+                };
+            }
+            catch (Exception)
+            {
+                // If any exception occurs during parsing, create error node and synchronize
+                var errorToken = _currentToken;
+                ReportError($"Error parsing statement starting with {errorToken.Type}");
+                Synchronize();
+                return new ErrorStatement($"Error parsing statement", errorToken.Line, errorToken.Column);
+            }
         }
 
         private ExpressionStatement ParseExpressionStatement()
         {
             // Parse an expression generally
             var expression = ParseExpression();
-            Consume(TokenType.Semicolon); // Ensure it ends with a semicolon
+
+            // Try to consume semicolon, but don't throw if missing
+            if (_currentToken.Type != TokenType.Semicolon)
+            {
+                ReportError($"Expected semicolon after expression, found {_currentToken.Type}");
+                // Don't consume - let synchronization handle it
+            }
+            else
+            {
+                Consume(TokenType.Semicolon);
+            }
+
             return new ExpressionStatement(expression);
         }
 
@@ -703,12 +819,33 @@ namespace Betty.Core
 
             while (_currentToken.Type != TokenType.EOF)
             {
+                // Handle error tokens
+                if (_currentToken.Type == TokenType.Error)
+                {
+                    ReportError((string)_currentToken.Value!);
+                    _currentToken = _lexer.GetNextToken();
+                    continue;
+                }
+
                 if (_currentToken.Type == TokenType.Func)
                 {
-                    functions.Add(ParseFunctionDefinition());
+                    try
+                    {
+                        functions.Add(ParseFunctionDefinition());
+                    }
+                    catch (Exception ex)
+                    {
+                        ReportError($"Error parsing function: {ex.Message}");
+                        SynchronizeToClosingBrace(); // Skip to end of function
+                        if (_currentToken.Type == TokenType.RBrace)
+                            _currentToken = _lexer.GetNextToken(); // Move past closing brace
+                    }
                 }
                 else
-                    throw new Exception("Unexpected token: " + _currentToken.Type);
+                {
+                    ReportError($"Unexpected token at top level: {_currentToken.Type}");
+                    _currentToken = _lexer.GetNextToken(); // Skip the bad token
+                }
             }
 
             return new Program(globals, functions);
@@ -718,8 +855,8 @@ namespace Betty.Core
         {
             var node = ParseProgram();
 
-            if (_currentToken.Type != TokenType.EOF)
-                throw new Exception($"Unexpected token: {_currentToken.Type}");
+            // Don't throw if there are errors - they're already recorded
+            // The interpreter can check the Errors property
 
             return node;
         }

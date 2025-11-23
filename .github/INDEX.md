@@ -11,7 +11,7 @@ Welcome to the Betty CI/CD pipeline documentation. This index will help you find
 | Get started quickly | [QUICK_START.md](QUICK_START.md) | 5 minutes |
 | Set up CI/CD for the first time | [SETUP_INSTRUCTIONS.md](SETUP_INSTRUCTIONS.md) | 10 minutes |
 | Understand versioning | [VERSIONING.md](VERSIONING.md) | 15 minutes |
-| Learn the complete system | [README.md](README.md) | 30 minutes |
+| Learn the complete system | [WORKFLOWS.md](WORKFLOWS.md) | 30 minutes |
 | See workflow diagrams | [WORKFLOW_DIAGRAM.md](WORKFLOW_DIAGRAM.md) | 10 minutes |
 | Add status badges | [BADGES.md](BADGES.md) | 5 minutes |
 | Create a pull request | [pull_request_template.md](pull_request_template.md) | N/A |
@@ -20,7 +20,7 @@ Welcome to the Betty CI/CD pipeline documentation. This index will help you find
 
 ### Core Documentation
 
-#### [README.md](README.md)
+#### [WORKFLOWS.md](WORKFLOWS.md)
 **Comprehensive CI/CD documentation**
 - Complete workflow overview
 - Security configuration
@@ -154,7 +154,7 @@ Welcome to the Betty CI/CD pipeline documentation. This index will help you find
 │   ├── release.yml               # Release workflow
 │   └── manual-release.yml        # Manual release trigger
 │
-├── README.md                     # Complete documentation
+├── WORKFLOWS.md                  # Complete documentation
 ├── QUICK_START.md               # Quick reference
 ├── VERSIONING.md                # Versioning guide
 ├── SETUP_INSTRUCTIONS.md        # Setup guide
@@ -175,11 +175,11 @@ Welcome to the Betty CI/CD pipeline documentation. This index will help you find
 
 ### For Repository Administrators
 1. [SETUP_INSTRUCTIONS.md](SETUP_INSTRUCTIONS.md) - Set up CI/CD
-2. [README.md](README.md) - Deep dive into workflows
+2. [WORKFLOWS.md](WORKFLOWS.md) - Deep dive into workflows
 3. [WORKFLOW_DIAGRAM.md](WORKFLOW_DIAGRAM.md) - Visualize the system
 
 ### For Maintainers
-1. [README.md](README.md) - Complete system understanding
+1. [WORKFLOWS.md](WORKFLOWS.md) - Complete system understanding
 2. [VERSIONING.md](VERSIONING.md) - Version management
 3. [WORKFLOW_DIAGRAM.md](WORKFLOW_DIAGRAM.md) - Architecture overview
 4. [BADGES.md](BADGES.md) - Update status badges
@@ -223,7 +223,7 @@ cat .github/INDEX.md
 
 | Document | Last Updated | Status |
 |----------|-------------|---------|
-| README.md | 2025-11-23 | ✅ Complete |
+| WORKFLOWS.md | 2025-11-23 | ✅ Complete |
 | QUICK_START.md | 2025-11-23 | ✅ Complete |
 | VERSIONING.md | 2025-11-23 | ✅ Complete |
 | SETUP_INSTRUCTIONS.md | 2025-11-23 | ✅ Complete |

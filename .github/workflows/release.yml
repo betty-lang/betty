@@ -5,10 +5,10 @@ on:
     branches:
       - main
     paths-ignore:
-      - '**.md'
       - 'docs/**'
-      - '.github/**'
-      - '!.github/workflows/release.yml'
+      - '.github/*.md'
+      - '.github/pull_request_template.md'
+      - 'README.md'
   workflow_dispatch:
     inputs:
       version-bump:

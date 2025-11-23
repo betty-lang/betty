@@ -129,27 +129,22 @@ jobs:
           fi
 
           # Save changelog to file to preserve formatting
-          cat > changelog.txt << 'EOF'
-## What's Changed
-
-EOF
-
-          # Append changelog (avoiding sed issues with special characters)
-          echo "$CHANGELOG" >> changelog.txt
-
-          cat >> changelog.txt << 'EOF'
-
-## Installation
-
-Download the appropriate binary for your platform from the assets below:
-
-- **Windows**: betty-windows-x64.zip
-- **Linux**: betty-linux-x64.tar.gz
-- **macOS (Intel)**: betty-macos-x64.tar.gz
-- **macOS (Apple Silicon)**: betty-macos-arm64.tar.gz
-
-Extract the archive and add the executable to your PATH.
-EOF
+          {
+            echo "## What's Changed"
+            echo ""
+            echo "$CHANGELOG"
+            echo ""
+            echo "## Installation"
+            echo ""
+            echo "Download the appropriate binary for your platform from the assets below:"
+            echo ""
+            echo "- **Windows**: betty-windows-x64.zip"
+            echo "- **Linux**: betty-linux-x64.tar.gz"
+            echo "- **macOS (Intel)**: betty-macos-x64.tar.gz"
+            echo "- **macOS (Apple Silicon)**: betty-macos-arm64.tar.gz"
+            echo ""
+            echo "Extract the archive and add the executable to your PATH."
+          } > changelog.txt
 
       - name: Create and push tag
         run: |

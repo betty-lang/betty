@@ -49,4 +49,4 @@ Betty uses an automated CI/CD pipeline powered by GitHub Actions:
 
 ---
 
-Learn more at [betty-lang.org](https://betty-lang.org) or check out the [documentation](https://betty-lang.github.io/betty-docs/).
+Learn more at [betty-lang.org](https://betty-lang.org)

@@ -1,0 +1,138 @@
+name: CI - Build and Test
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Test on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        include:
+          - os: ubuntu-latest
+            platform: linux
+          - os: windows-latest
+            platform: windows
+          - os: macos-latest
+            platform: macos
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+
+      - name: Restore dependencies
+        run: dotnet restore Betty.sln
+
+      - name: Build solution
+        run: dotnet build Betty.sln --configuration Release --no-restore
+
+      - name: Run tests
+        run: dotnet test Betty.sln --configuration Release --no-build --verbosity normal --logger "trx;LogFileName=test-results-${{ matrix.platform }}.trx"
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-${{ matrix.platform }}
+          path: '**/test-results-*.trx'
+          retention-days: 30
+
+  build-artifacts:
+    name: Build Release Artifacts
+    needs: test
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            rid: linux-x64
+            artifact-name: betty-linux-x64
+          - os: windows-latest
+            rid: win-x64
+            artifact-name: betty-windows-x64
+          - os: macos-latest
+            rid: osx-x64
+            artifact-name: betty-macos-x64
+          - os: macos-latest
+            rid: osx-arm64
+            artifact-name: betty-macos-arm64
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+
+      - name: Restore dependencies
+        run: dotnet restore Betty.sln
+
+      - name: Publish self-contained executable
+        run: |
+          dotnet publish src/Betty.CLI/Betty.CLI.csproj \
+            --configuration Release \
+            --runtime ${{ matrix.rid }} \
+            --self-contained true \
+            -p:PublishSingleFile=true \
+            -p:IncludeNativeLibrariesForSelfExtract=true \
+            -p:PublishTrimmed=true \
+            --output ./publish/${{ matrix.rid }}
+
+      - name: Create archive (Unix)
+        if: runner.os != 'Windows'
+        working-directory: ./publish/${{ matrix.rid }}
+        run: |
+          chmod +x betty || chmod +x Betty.CLI
+          tar -czf ../../${{ matrix.artifact-name }}.tar.gz *
+
+      - name: Create archive (Windows)
+        if: runner.os == 'Windows'
+        working-directory: ./publish/${{ matrix.rid }}
+        run: |
+          Compress-Archive -Path * -DestinationPath ../../${{ matrix.artifact-name }}.zip
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact-name }}
+          path: |
+            ${{ matrix.artifact-name }}.tar.gz
+            ${{ matrix.artifact-name }}.zip
+          retention-days: 90
+
+  ci-success:
+    name: CI Success
+    needs: [test, build-artifacts]
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: Check CI results
+        run: |
+          if [ "${{ needs.test.result }}" != "success" ] || [ "${{ needs.build-artifacts.result }}" != "success" ]; then
+            echo "CI failed - test: ${{ needs.test.result }}, build: ${{ needs.build-artifacts.result }}"
+            exit 1
+          fi
+          echo "CI passed successfully"

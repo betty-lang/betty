@@ -91,6 +91,7 @@ jobs:
         run: dotnet restore Betty.sln
 
       - name: Publish self-contained executable
+        shell: bash
         run: |
           dotnet publish src/Betty.CLI/Betty.CLI.csproj \
             --configuration Release \

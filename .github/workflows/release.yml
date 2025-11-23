@@ -130,24 +130,26 @@ jobs:
 
           # Save changelog to file to preserve formatting
           cat > changelog.txt << 'EOF'
-          ## What's Changed
+## What's Changed
 
-          $CHANGELOG
+EOF
 
-          ## Installation
+          # Append changelog (avoiding sed issues with special characters)
+          echo "$CHANGELOG" >> changelog.txt
 
-          Download the appropriate binary for your platform from the assets below:
+          cat >> changelog.txt << 'EOF'
 
-          - **Windows**: betty-windows-x64.zip
-          - **Linux**: betty-linux-x64.tar.gz
-          - **macOS (Intel)**: betty-macos-x64.tar.gz
-          - **macOS (Apple Silicon)**: betty-macos-arm64.tar.gz
+## Installation
 
-          Extract the archive and add the executable to your PATH.
-          EOF
+Download the appropriate binary for your platform from the assets below:
 
-          # Replace placeholder with actual changelog
-          sed -i "s|\$CHANGELOG|$CHANGELOG|" changelog.txt
+- **Windows**: betty-windows-x64.zip
+- **Linux**: betty-linux-x64.tar.gz
+- **macOS (Intel)**: betty-macos-x64.tar.gz
+- **macOS (Apple Silicon)**: betty-macos-arm64.tar.gz
+
+Extract the archive and add the executable to your PATH.
+EOF
 
       - name: Create and push tag
         run: |
@@ -211,6 +213,7 @@ jobs:
         run: dotnet restore Betty.sln
 
       - name: Publish self-contained executable
+        shell: bash
         run: |
           dotnet publish src/Betty.CLI/Betty.CLI.csproj \
             --configuration Release \

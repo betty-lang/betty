@@ -49,19 +49,18 @@ jobs:
       - name: Run tests
         run: dotnet test Betty.sln --configuration Release --no-build --verbosity normal
 
-  create-release:
-    name: Create Release
+  calculate-version:
+    name: Calculate Version
     needs: verify-ci
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.version.outputs.version }}
-      upload_url: ${{ steps.create_release.outputs.upload_url }}
+      tag: ${{ steps.version.outputs.tag }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Determine version bump type
         id: bump-type
@@ -83,52 +82,149 @@ jobs:
       - name: Calculate next version
         id: version
         run: |
-          # Get the latest tag, default to 0.0.0 if none exists
-          LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
-          LATEST_VERSION=${LATEST_TAG#v}
-
-          # Split version into components
-          IFS='.' read -r MAJOR MINOR PATCH <<< "$LATEST_VERSION"
-
-          # Increment based on bump type
+          # Get the latest tag
+          LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
           BUMP_TYPE="${{ steps.bump-type.outputs.bump }}"
 
-          if [ "$BUMP_TYPE" = "major" ]; then
-            MAJOR=$((MAJOR + 1))
-            MINOR=0
-            PATCH=0
-          elif [ "$BUMP_TYPE" = "minor" ]; then
-            MINOR=$((MINOR + 1))
-            PATCH=0
+          if [ -z "$LATEST_TAG" ]; then
+            # First release - start at 0.1.0 or 1.0.0 depending on bump type
+            if [ "$BUMP_TYPE" = "major" ]; then
+              NEW_VERSION="1.0.0"
+            else
+              NEW_VERSION="0.1.0"
+            fi
+            echo "First release detected, starting at version $NEW_VERSION"
           else
-            PATCH=$((PATCH + 1))
+            # Existing releases - increment from latest tag
+            LATEST_VERSION=${LATEST_TAG#v}
+            IFS='.' read -r MAJOR MINOR PATCH <<< "$LATEST_VERSION"
+
+            if [ "$BUMP_TYPE" = "major" ]; then
+              MAJOR=$((MAJOR + 1))
+              MINOR=0
+              PATCH=0
+            elif [ "$BUMP_TYPE" = "minor" ]; then
+              MINOR=$((MINOR + 1))
+              PATCH=0
+            else
+              PATCH=$((PATCH + 1))
+            fi
+
+            NEW_VERSION="$MAJOR.$MINOR.$PATCH"
+            echo "Bumping version from $LATEST_VERSION to $NEW_VERSION (bump type: $BUMP_TYPE)"
           fi
 
-          NEW_VERSION="$MAJOR.$MINOR.$PATCH"
           echo "version=$NEW_VERSION" >> $GITHUB_OUTPUT
           echo "tag=v$NEW_VERSION" >> $GITHUB_OUTPUT
-          echo "previous=$LATEST_VERSION" >> $GITHUB_OUTPUT
 
-          echo "Bumping version from $LATEST_VERSION to $NEW_VERSION (bump type: $BUMP_TYPE)"
+  build-artifacts:
+    name: Build ${{ matrix.artifact-name }}
+    needs: calculate-version
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            rid: linux-x64
+            artifact-name: betty-linux-x64
+            asset-name: betty-linux-x64.tar.gz
+          - os: windows-latest
+            rid: win-x64
+            artifact-name: betty-windows-x64
+            asset-name: betty-windows-x64.zip
+          - os: macos-latest
+            rid: osx-x64
+            artifact-name: betty-macos-x64
+            asset-name: betty-macos-x64.tar.gz
+          - os: macos-latest
+            rid: osx-arm64
+            artifact-name: betty-macos-arm64
+            asset-name: betty-macos-arm64.tar.gz
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+
+      - name: Restore dependencies
+        run: dotnet restore Betty.sln
+
+      - name: Publish self-contained executable
+        shell: bash
+        run: |
+          dotnet publish src/Betty.CLI/Betty.CLI.csproj \
+            --configuration Release \
+            --runtime ${{ matrix.rid }} \
+            --self-contained true \
+            -p:PublishSingleFile=true \
+            -p:IncludeNativeLibrariesForSelfExtract=true \
+            -p:PublishTrimmed=true \
+            -p:Version=${{ needs.calculate-version.outputs.version }} \
+            --output ./publish/${{ matrix.rid }}
+
+      - name: Create archive (Unix)
+        if: runner.os != 'Windows'
+        working-directory: ./publish/${{ matrix.rid }}
+        run: |
+          chmod +x betty || chmod +x Betty.CLI || true
+          tar -czf ../../${{ matrix.asset-name }} *
+
+      - name: Create archive (Windows)
+        if: runner.os == 'Windows'
+        working-directory: ./publish/${{ matrix.rid }}
+        run: |
+          Compress-Archive -Path * -DestinationPath ../../${{ matrix.asset-name }}
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact-name }}
+          path: ${{ matrix.asset-name }}
+          retention-days: 1
+
+  create-release:
+    name: Create Release
+    needs: [calculate-version, build-artifacts]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Prepare artifacts
+        run: |
+          mkdir -p release-assets
+          find artifacts -type f \( -name "*.tar.gz" -o -name "*.zip" \) -exec mv {} release-assets/ \;
+          ls -lh release-assets/
 
       - name: Generate changelog
         id: changelog
         run: |
-          PREV_TAG="v${{ steps.version.outputs.previous }}"
+          # Get previous tag for changelog
+          PREV_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
 
-          # Check if previous tag exists
-          if git rev-parse "$PREV_TAG" >/dev/null 2>&1; then
+          if [ -n "$PREV_TAG" ]; then
             CHANGELOG=$(git log $PREV_TAG..HEAD --pretty=format:"- %s (%h)" --no-merges)
           else
             # First release - get all commits
-            CHANGELOG=$(git log --pretty=format:"- %s (%h)" --no-merges)
+            CHANGELOG=$(git log --pretty=format:"- %s (%h)" --no-merges | head -20)
           fi
 
           if [ -z "$CHANGELOG" ]; then
             CHANGELOG="- Initial release"
           fi
 
-          # Save changelog to file to preserve formatting
+          # Save changelog to file
           {
             echo "## What's Changed"
             echo ""
@@ -150,105 +246,30 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git tag -a ${{ steps.version.outputs.tag }} -m "Release ${{ steps.version.outputs.version }}"
-          git push origin ${{ steps.version.outputs.tag }}
+          git tag -a ${{ needs.calculate-version.outputs.tag }} -m "Release ${{ needs.calculate-version.outputs.version }}"
+          git push origin ${{ needs.calculate-version.outputs.tag }}
 
       - name: Create GitHub Release
-        id: create_release
-        uses: actions/create-release@v1
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tag_name: ${{ steps.version.outputs.tag }}
-          release_name: Betty ${{ steps.version.outputs.version }}
-          body_path: changelog.txt
-          draft: false
-          prerelease: ${{ startsWith(steps.version.outputs.version, '0.') }}
-
-  build-and-upload-assets:
-    name: Build and Upload Release Assets
-    needs: create-release
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        include:
-          - os: ubuntu-latest
-            rid: linux-x64
-            artifact-name: betty-linux-x64
-            asset-name: betty-linux-x64.tar.gz
-            asset-type: application/gzip
-          - os: windows-latest
-            rid: win-x64
-            artifact-name: betty-windows-x64
-            asset-name: betty-windows-x64.zip
-            asset-type: application/zip
-          - os: macos-latest
-            rid: osx-x64
-            artifact-name: betty-macos-x64
-            asset-name: betty-macos-x64.tar.gz
-            asset-type: application/gzip
-          - os: macos-latest
-            rid: osx-arm64
-            artifact-name: betty-macos-arm64
-            asset-name: betty-macos-arm64.tar.gz
-            asset-type: application/gzip
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ needs.create-release.outputs.version }}
-
-      - name: Setup .NET
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: '9.0.x'
-
-      - name: Restore dependencies
-        run: dotnet restore Betty.sln
-
-      - name: Publish self-contained executable
-        shell: bash
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          dotnet publish src/Betty.CLI/Betty.CLI.csproj \
-            --configuration Release \
-            --runtime ${{ matrix.rid }} \
-            --self-contained true \
-            -p:PublishSingleFile=true \
-            -p:IncludeNativeLibrariesForSelfExtract=true \
-            -p:PublishTrimmed=true \
-            -p:Version=${{ needs.create-release.outputs.version }} \
-            --output ./publish/${{ matrix.rid }}
+          PRERELEASE_FLAG=""
+          if [[ "${{ needs.calculate-version.outputs.version }}" == 0.* ]]; then
+            PRERELEASE_FLAG="--prerelease"
+          fi
 
-      - name: Create archive (Unix)
-        if: runner.os != 'Windows'
-        working-directory: ./publish/${{ matrix.rid }}
-        run: |
-          chmod +x betty || chmod +x Betty.CLI
-          tar -czf ../../${{ matrix.asset-name }} *
-
-      - name: Create archive (Windows)
-        if: runner.os == 'Windows'
-        working-directory: ./publish/${{ matrix.rid }}
-        run: |
-          Compress-Archive -Path * -DestinationPath ../../${{ matrix.asset-name }}
-
-      - name: Upload Release Asset
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ needs.create-release.outputs.upload_url }}
-          asset_path: ./${{ matrix.asset-name }}
-          asset_name: ${{ matrix.asset-name }}
-          asset_content_type: ${{ matrix.asset-type }}
+          gh release create ${{ needs.calculate-version.outputs.tag }} \
+            --title "Betty ${{ needs.calculate-version.outputs.version }}" \
+            --notes-file changelog.txt \
+            $PRERELEASE_FLAG \
+            release-assets/*
 
   release-success:
     name: Release Success
-    needs: [verify-ci, create-release, build-and-upload-assets]
+    needs: [calculate-version, create-release]
     runs-on: ubuntu-latest
     steps:
       - name: Announce release
         run: |
-          echo "Successfully released Betty version ${{ needs.create-release.outputs.version }}"
-          echo "Release URL: ${{ github.server_url }}/${{ github.repository }}/releases/tag/v${{ needs.create-release.outputs.version }}"
+          echo "Successfully released Betty version ${{ needs.calculate-version.outputs.version }}"
+          echo "Release URL: ${{ github.server_url }}/${{ github.repository }}/releases/tag/${{ needs.calculate-version.outputs.tag }}"

@@ -307,8 +307,6 @@ git push origin feature/parser-improvements
 
 ## Getting Help
 
-- **Full Documentation**: See [README.md](.github/README.md)
-- **Versioning Guide**: See [VERSIONING.md](.github/VERSIONING.md)
 - **Open Issue**: Create issue with `ci/cd` label
 - **GitHub Actions Docs**: https://docs.github.com/actions
 

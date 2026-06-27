@@ -2,6 +2,12 @@
 
 ---
 
+![CI](https://github.com/betty-lang/betty/actions/workflows/ci.yml/badge.svg)
+![Release](https://img.shields.io/github/v/release/betty-lang/betty?include_prereleases)
+![License](https://img.shields.io/github/license/betty-lang/betty)
+![Platform](https://img.shields.io/badge/platform-windows%20%7C%20macos%20%7C%20linux-lightgrey)
+![.NET](https://img.shields.io/badge/.NET-9.0-512BD4)
+
 Betty is a dynamic programming language designed for prototyping purposes. It supports various data types, has a standard library, and offers a simple and intuitive syntax. For more information, please refer to the [official Betty documentation](https://betty-lang.github.io/betty-docs/).
 
 ## Quick Start
@@ -10,7 +16,7 @@ Betty is a dynamic programming language designed for prototyping purposes. It su
 
 Betty now has automated releases with pre-built binaries for Windows, macOS, and Linux!
 
-**[Download the latest release](https://github.com/betty-lang/betty/releases/latest)**
+**[Download the latest release](https://github.com/betty-lang/betty/releases)**
 
 Choose the appropriate binary for your platform:
 - **Windows**: `betty-windows-x64.zip`
